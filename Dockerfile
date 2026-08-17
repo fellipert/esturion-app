@@ -14,7 +14,3 @@ RUN mkdir -p uploads
 EXPOSE 4000
 
 CMD ["node", "server/index.js"]
-
-cd ~/Downloads
-ls esturion-app
-

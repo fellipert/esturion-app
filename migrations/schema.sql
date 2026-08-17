@@ -98,3 +98,7 @@ INSERT INTO users (email, password_hash, role, full_name) VALUES
   ('maria_camigo4@hotmail.com', '$2a$10$PsTX3U2JNZVwKSibnwo3H.ID204jvnOs9XTmDSdUs8/hFIsoZTa6u', 'admin', 'María Camigo'),
   ('susigonzalezbetancur.25@gmail.com', '$2a$10$PsTX3U2JNZVwKSibnwo3H.ID204jvnOs9XTmDSdUs8/hFIsoZTa6u', 'admin', 'Susi González Betancur')
 ON CONFLICT (email) DO NOTHING;
+
+-- Código de invitación inicial para el registro de clientes. Cámbialo desde "Socios" (súper admin).
+INSERT INTO club_settings (key, value) VALUES ('invite_code', 'ESTURION2026')
+ON CONFLICT (key) DO NOTHING;

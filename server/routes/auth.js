@@ -43,9 +43,14 @@ function isValidEmail(email) {
 // Las cuentas de admin/super_admin las crea el super administrador desde el panel de Socios.
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, fullName, phone } = req.body;
+    const { email, password, fullName, phone, inviteCode } = req.body;
     if (!email || !password || !fullName) {
       return res.status(400).json({ error: 'Nombre, correo y contraseña son obligatorios.' });
+    }
+    const codeRow = await pool.query("SELECT value FROM club_settings WHERE key = 'invite_code'");
+    const validCode = codeRow.rows[0]?.value;
+    if (validCode && String(inviteCode || '').trim().toUpperCase() !== String(validCode).trim().toUpperCase()) {
+      return res.status(403).json({ error: 'Código de invitación inválido. Pídelo a la administración del club.' });
     }
     const cleanEmail = String(email).trim().toLowerCase();
     if (!isValidEmail(cleanEmail)) return res.status(400).json({ error: 'Correo inválido.' });

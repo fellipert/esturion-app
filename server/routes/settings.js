@@ -22,4 +22,25 @@ router.post('/logo', requireAuth, requireRole('super_admin'), upload.single('log
   res.json({ logoUrl: url });
 });
 
+// Ver el código de invitación actual — solo super_admin
+router.get('/invite-code', requireAuth, requireRole('super_admin'), async (req, res) => {
+  const result = await pool.query("SELECT value FROM club_settings WHERE key = 'invite_code'");
+  res.json({ inviteCode: result.rows[0]?.value || null });
+});
+
+// Cambiar/regenerar el código de invitación — solo super_admin
+router.post('/invite-code', requireAuth, requireRole('super_admin'), async (req, res) => {
+  let { code } = req.body;
+  if (!code || !code.trim()) {
+    code = Math.random().toString(36).slice(2, 8).toUpperCase();
+  }
+  code = code.trim();
+  await pool.query(
+    `INSERT INTO club_settings (key, value) VALUES ('invite_code', $1)
+     ON CONFLICT (key) DO UPDATE SET value = $1`,
+    [code]
+  );
+  res.json({ inviteCode: code });
+});
+
 module.exports = router;

@@ -28,6 +28,7 @@
     myMessages: [],
     sentMessages: [],
     composeScope: 'individual',
+    inviteCode: null,
   };
 
   function isSuper(){ return S.user && S.user.role === 'super_admin'; }
@@ -112,6 +113,7 @@
       try{ const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members; }catch(e){}
       try{ S.cartera = await api('/payments/cartera'); }catch(e){}
       try{ const m = await api('/messages/sent'); S.sentMessages = m.messages; }catch(e){}
+      if(isSuper()){ try{ const ic = await api('/settings/invite-code'); S.inviteCode = ic.inviteCode; }catch(e){} }
     } else {
       try{ const p = await api('/payments/me'); S.myPayment = p; }catch(e){}
       try{ S.myStats = await api('/classes/attendance-stats/me'); }catch(e){}
@@ -199,6 +201,8 @@
       <input class="es-input" id="es-reg-phone" placeholder="Teléfono de contacto"/>
       <label class="es-label">Contraseña</label>
       <input class="es-input" type="password" id="es-reg-pass" placeholder="Crea una contraseña"/>
+      <label class="es-label">Código de invitación</label>
+      <input class="es-input" id="es-reg-invite" placeholder="Pídelo a la administración del club"/>
       <button class="es-btn" id="es-reg-btn" style="margin-top:14px;width:100%">Crear mi cuenta</button>
     `;
   }
@@ -529,6 +533,15 @@
     let html = '';
     if(isSuper()){
       html += `<div class="es-card" style="margin-bottom:16px">
+        <h2 class="es-h">Código de invitación</h2>
+        <p class="es-sub">Los nuevos clientes deben ingresarlo para poder crear su cuenta desde "Crear cuenta".</p>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:8px">
+          <div style="font-family:var(--font-mono);font-size:18px;font-weight:700;background:var(--bg-alt);padding:8px 14px;border-radius:8px;letter-spacing:1px">${escapeHtml(S.inviteCode||'—')}</div>
+          <button class="es-btn secondary" id="es-invite-regen">Generar nuevo código</button>
+        </div>
+        <p class="es-hint" style="margin-top:8px">Al generar uno nuevo, el código anterior deja de funcionar de inmediato — compártelo con quien quieras invitar.</p>
+      </div>`;
+      html += `<div class="es-card" style="margin-bottom:16px">
         <h2 class="es-h">Crear cuenta de administración</h2>
         <p class="es-sub">Da acceso a un nuevo administrador o súper administrador.</p>
         <div class="es-grid">
@@ -704,8 +717,9 @@
       const email = document.getElementById('es-reg-email').value.trim();
       const phone = document.getElementById('es-reg-phone').value.trim();
       const password = document.getElementById('es-reg-pass').value;
+      const inviteCode = document.getElementById('es-reg-invite').value.trim();
       try{
-        const r = await api('/auth/register', { method:'POST', body: JSON.stringify({ fullName, email, phone, password }) });
+        const r = await api('/auth/register', { method:'POST', body: JSON.stringify({ fullName, email, phone, password, inviteCode }) });
         S.token = r.token; localStorage.setItem(TOKEN_KEY, r.token);
         S.user = r.user; S.authError=''; S.tab='perfil';
         S.loading = true; render();
@@ -851,6 +865,15 @@
         await api('/messages', { method:'POST', body: JSON.stringify(payload) });
         const m = await api('/messages/sent'); S.sentMessages = m.messages;
         showToast('Mensaje enviado'); render();
+      }catch(err){ showToast(err.message); }
+    };
+
+    const inviteRegen = document.getElementById('es-invite-regen');
+    if(inviteRegen) inviteRegen.onclick = async ()=>{
+      try{
+        const r = await api('/settings/invite-code', { method:'POST', body: JSON.stringify({}) });
+        S.inviteCode = r.inviteCode;
+        showToast('Código regenerado'); render();
       }catch(err){ showToast(err.message); }
     };
 
