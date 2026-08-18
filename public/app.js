@@ -39,6 +39,7 @@
     myPreference: null,
     showPrefPicker: false,
     showNewScheduleForm: false,
+    asistenciaDate: null,
   };
 
   function isSuper(){ return S.user && S.user.role === 'super_admin'; }
@@ -709,11 +710,17 @@
   }
 
   function renderAsistenciaAdmin(){
-    const classes = S.classes.slice().sort((a,b)=> b.date.localeCompare(a.date));
-    let html = `<div class="es-card">
-      <h2 class="es-h">Registro de asistencia por clase</h2>
-      <p class="es-sub">Clientes que confirmaron asistencia para cada clase.</p>`;
-    if(classes.length===0){ html += renderEmpty('No hay clases creadas todavía.'); }
+    const filterDate = S.asistenciaDate || todayStr();
+    const classes = S.classes.filter(c => c.date === filterDate);
+    let html = `<div class="es-card" style="margin-bottom:16px">
+      <h2 class="es-h">Filtrar por día</h2>
+      <p class="es-sub">Elige una fecha para ver y confirmar quién asistió realmente ese día.</p>
+      <input class="es-input" type="date" id="es-asist-date" value="${filterDate}" style="max-width:220px"/>
+    </div>`;
+    html += `<div class="es-card">
+      <h2 class="es-h">Registro de asistencia — ${fmtDate(filterDate)}</h2>
+      <p class="es-sub">Clientes que confirmaron asistencia para cada clase de este día.</p>`;
+    if(classes.length===0){ html += renderEmpty('No hay clases programadas para este día.'); }
     classes.forEach(c=>{
       const attendees = S.classAttendance[c.id];
       html += `<div class="es-attendance-block" data-classid="${c.id}" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
@@ -1367,6 +1374,13 @@
 
     const toggleMorosos = document.getElementById('es-toggle-morosos');
     if(toggleMorosos) toggleMorosos.onclick = ()=>{ S.showMorosos = !S.showMorosos; render(); };
+
+    const asistDate = document.getElementById('es-asist-date');
+    if(asistDate) asistDate.onchange = ()=>{
+      S.asistenciaDate = asistDate.value;
+      render();
+      loadAllAttendance();
+    };
 
     document.querySelectorAll('[data-markattend]').forEach(el=>{
       el.onclick = async ()=>{
