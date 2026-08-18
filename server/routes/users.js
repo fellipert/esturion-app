@@ -23,6 +23,7 @@ function publicUser(row) {
       monthlyFee: row.monthly_fee != null ? Number(row.monthly_fee) : 180000,
       notes: row.notes || null,
       active: row.active !== false,
+      hasBeneficiaries: row.has_beneficiaries === true,
     };
   }
   return base;
@@ -50,17 +51,21 @@ router.get('/me', requireAuth, async (req, res) => {
 // Actualizar mi propio perfil (cualquier rol). Si soy cliente, también puedo
 // actualizar mi contacto de emergencia (no mi cuota mensual, esa la fija la administración).
 router.put('/me', requireAuth, async (req, res) => {
-  const { fullName, phone, emergencyContactName, emergencyContactPhone } = req.body;
+  const { fullName, phone, emergencyContactName, emergencyContactPhone, hasBeneficiaries } = req.body;
   await pool.query(
     `UPDATE users SET full_name = COALESCE($1, full_name), phone = $2 WHERE id = $3`,
     [fullName || null, phone || null, req.user.id]
   );
   if (req.user.role === 'cliente') {
     await ensureClientRow(req.user.id);
-    await pool.query(
-      `UPDATE clients SET emergency_contact_name = $1, emergency_contact_phone = $2 WHERE user_id = $3`,
-      [emergencyContactName || null, emergencyContactPhone || null, req.user.id]
-    );
+    const fields = ['emergency_contact_name = $1', 'emergency_contact_phone = $2'];
+    const params = [emergencyContactName || null, emergencyContactPhone || null];
+    if (typeof hasBeneficiaries === 'boolean') {
+      fields.push(`has_beneficiaries = $${params.length + 1}`);
+      params.push(hasBeneficiaries);
+    }
+    params.push(req.user.id);
+    await pool.query(`UPDATE clients SET ${fields.join(', ')} WHERE user_id = $${params.length}`, params);
   }
   const result = await pool.query(SELECT_WITH_CLIENT + ' WHERE u.id = $1', [req.user.id]);
   res.json({ user: publicUser(result.rows[0]) });

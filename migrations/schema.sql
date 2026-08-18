@@ -30,7 +30,20 @@ CREATE TABLE IF NOT EXISTS clients (
   monthly_fee             NUMERIC(10,2) NOT NULL DEFAULT 180000,
   notes                   TEXT,
   active                  BOOLEAN NOT NULL DEFAULT true,
+  has_beneficiaries       BOOLEAN NOT NULL DEFAULT false,
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Beneficiarios de un cliente (hijos, familiares, etc.) que pueden reservar clases
+-- bajo la cuenta del cliente titular, sin tener su propio login.
+CREATE TABLE IF NOT EXISTS beneficiaries (
+  id             SERIAL PRIMARY KEY,
+  client_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  full_name      VARCHAR(120) NOT NULL,
+  id_type        VARCHAR(20) NOT NULL DEFAULT 'CC' CHECK (id_type IN ('CC','TI','CE','PASAPORTE','RC')),
+  id_number      VARCHAR(40),
+  sex            VARCHAR(20) CHECK (sex IN ('masculino','femenino','otro')),
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS classes (
@@ -43,18 +56,22 @@ CREATE TABLE IF NOT EXISTS classes (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- "confirmed" = el cliente reservó/confirmó que va a ir.
--- "attended"  = lo que realmente pasó, lo marca un admin después de la clase (NULL = aún sin marcar).
+-- "confirmed" = se reservó/confirmó que va a ir. "attended" = lo que realmente pasó, lo marca
+-- un admin después de la clase (NULL = aún sin marcar). "beneficiary_id" NULL = la reserva es
+-- del propio cliente (titular); si tiene valor, es la reserva de ese beneficiario específico.
 CREATE TABLE IF NOT EXISTS attendance (
   id                SERIAL PRIMARY KEY,
   class_id          INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
   user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  beneficiary_id    INTEGER REFERENCES beneficiaries(id) ON DELETE CASCADE,
   confirmed         BOOLEAN NOT NULL DEFAULT true,
   confirmed_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   attended          BOOLEAN,
-  attended_marked_at TIMESTAMPTZ,
-  UNIQUE(class_id, user_id)
+  attended_marked_at TIMESTAMPTZ
 );
+-- Único por clase + cuenta + persona (titular o beneficiario). COALESCE evita duplicados del titular.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_unique
+  ON attendance(class_id, user_id, COALESCE(beneficiary_id, 0));
 
 CREATE TABLE IF NOT EXISTS payments (
   id            SERIAL PRIMARY KEY,
@@ -87,6 +104,7 @@ CREATE TABLE IF NOT EXISTS club_settings (
 
 CREATE INDEX IF NOT EXISTS idx_attendance_class ON attendance(class_id);
 CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id);
+CREATE INDEX IF NOT EXISTS idx_beneficiaries_client ON beneficiaries(client_user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_classes_date ON classes(class_date);
 CREATE INDEX IF NOT EXISTS idx_messages_recipient_user ON messages(recipient_user_id);

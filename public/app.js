@@ -26,6 +26,9 @@
     showMorosos: false,
     myStats: null,
     myMessages: [],
+    myBeneficiaries: [],
+    newBenIdType: 'CC',
+    newBenSex: 'masculino',
     sentMessages: [],
     composeScope: 'individual',
     inviteCode: null,
@@ -117,6 +120,7 @@
     } else {
       try{ const p = await api('/payments/me'); S.myPayment = p; }catch(e){}
       try{ S.myStats = await api('/classes/attendance-stats/me'); }catch(e){}
+      try{ const b = await api('/beneficiaries/me'); S.myBeneficiaries = b.beneficiaries; }catch(e){}
     }
     try{ const m = await api('/messages/me'); S.myMessages = m.messages; }catch(e){}
   }
@@ -125,9 +129,11 @@
   function render(){
     if(S.loading){ ROOT.innerHTML = renderLoading(); return; }
     let html = renderTopbar();
-    html += '<div class="es-body">';
-    html += S.user ? renderDashboard() : renderAuth();
-    html += '</div>';
+    if(S.user){
+      html += `<div class="es-layout">${renderSidebar()}<div class="es-main">${renderDashboardContent()}</div></div>`;
+    } else {
+      html += `<div class="es-body">${renderAuth()}</div>`;
+    }
     if(S.toast) html += `<div class="es-toast">${escapeHtml(S.toast)}</div>`;
     ROOT.innerHTML = html;
     attachHandlers();
@@ -208,18 +214,34 @@
   }
 
   // ---------- DASHBOARD ----------
-  function renderDashboard(){
-    const tabs = isSuper()
+  const NAV_ICONS = {
+    perfil: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>',
+    clases: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>',
+    asistencia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.3 2.3L16 9.5"/></svg>',
+    pagos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg>',
+    socios: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><circle cx="17.5" cy="8.5" r="2.5"/><path d="M15.7 13.8c2.6.5 4.6 2.8 4.6 5.6"/></svg>',
+    mensajes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z"/></svg>',
+  };
+
+  function navTabs(){
+    return isSuper()
       ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Socios'],['mensajes','Mensajes']]
       : isAdminOrAbove()
         ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Socios'],['mensajes','Mensajes']]
         : [['perfil','Mi perfil'],['clases','Clases'],['pagos','Mi mensualidad'],['mensajes','Mensajes']];
-    let html = `<div class="es-tabs">`;
-    tabs.forEach(([key,label])=>{
-      html += `<button data-tab="${key}" class="${S.tab===key?'active':''}">${label}</button>`;
-    });
-    html += `</div>`;
+  }
 
+  function renderSidebar(){
+    let html = `<nav class="es-sidebar">`;
+    navTabs().forEach(([key,label])=>{
+      html += `<button data-tab="${key}" class="${S.tab===key?'active':''}">${NAV_ICONS[key]||''}<span>${label}</span></button>`;
+    });
+    html += `</nav>`;
+    return html;
+  }
+
+  function renderDashboardContent(){
+    let html = '';
     if(S.tab === 'perfil') html += renderPerfil();
     else if(S.tab === 'clases') html += isSuper() ? renderClasesSuper() : (isAdminOrAbove() ? renderClasesAdminView() : renderClasesCliente());
     else if(S.tab === 'asistencia' && isAdminOrAbove()) html += renderAsistenciaAdmin();
@@ -255,10 +277,50 @@
       <label class="es-label">Contacto de emergencia — nombre</label>
       <input class="es-input" id="es-p-ec-name" value="${escapeHtml(cl.emergencyContactName||'')}"/>
       <label class="es-label">Contacto de emergencia — teléfono</label>
-      <input class="es-input" id="es-p-ec-phone" value="${escapeHtml(cl.emergencyContactPhone||'')}"/>`;
+      <input class="es-input" id="es-p-ec-phone" value="${escapeHtml(cl.emergencyContactPhone||'')}"/>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:600;color:var(--navy)">
+        <input type="checkbox" id="es-p-has-ben" ${cl.hasBeneficiaries?'checked':''}/> Tengo beneficiarios (hijos/familiares) en el club
+      </label>`;
     }
     html += `<button class="es-btn" id="es-p-save" style="margin-top:14px">Guardar cambios</button>
     </div>`;
+    if(user.role === 'cliente' && (user.client||{}).hasBeneficiaries){
+      html += `<div class="es-card" style="max-width:480px;margin-top:16px">
+        <h2 class="es-h">Mis beneficiarios</h2>
+        <p class="es-sub">Podrás confirmarles asistencia a las clases desde tu cuenta.</p>`;
+      if(S.myBeneficiaries.length===0){ html += renderEmpty('Aún no has agregado ningún beneficiario.'); }
+      else{
+        S.myBeneficiaries.forEach(b=>{
+          html += `<div class="es-list-item">
+            <div><div style="font-weight:700;font-size:13px">${escapeHtml(b.fullName)}</div>
+            <div class="meta">${escapeHtml(b.idType)}${b.idNumber?' '+escapeHtml(b.idNumber):''} · ${escapeHtml(b.sex||'')}</div></div>
+            <a class="es-link" data-delben="${b.id}" style="font-size:11.5px;color:var(--alert)">eliminar</a>
+          </div>`;
+        });
+      }
+      html += `
+      <h2 class="es-h" style="margin-top:16px;font-size:14px">Agregar beneficiario</h2>
+      <label class="es-label">Nombre completo</label>
+      <input class="es-input" id="es-ben-name" placeholder="Nombre y apellido"/>
+      <label class="es-label">Tipo de identificación</label>
+      <select class="es-input" id="es-ben-idtype">
+        <option value="CC" ${S.newBenIdType==='CC'?'selected':''}>Cédula de ciudadanía</option>
+        <option value="TI" ${S.newBenIdType==='TI'?'selected':''}>Tarjeta de identidad</option>
+        <option value="RC" ${S.newBenIdType==='RC'?'selected':''}>Registro civil</option>
+        <option value="CE" ${S.newBenIdType==='CE'?'selected':''}>Cédula de extranjería</option>
+        <option value="PASAPORTE" ${S.newBenIdType==='PASAPORTE'?'selected':''}>Pasaporte</option>
+      </select>
+      <label class="es-label">Número de identificación (opcional)</label>
+      <input class="es-input" id="es-ben-idnumber" placeholder="Número"/>
+      <label class="es-label">Sexo</label>
+      <select class="es-input" id="es-ben-sex">
+        <option value="masculino" ${S.newBenSex==='masculino'?'selected':''}>Masculino</option>
+        <option value="femenino" ${S.newBenSex==='femenino'?'selected':''}>Femenino</option>
+        <option value="otro" ${S.newBenSex==='otro'?'selected':''}>Otro</option>
+      </select>
+      <button class="es-btn" id="es-ben-add" style="margin-top:14px">Agregar beneficiario</button>
+      </div>`;
+    }
     if(user.role === 'cliente' && S.myStats){
       const st = S.myStats;
       html += `<div class="es-card" style="max-width:480px;margin-top:16px">
@@ -354,29 +416,47 @@
     const today = todayStr();
     const upcoming = S.classes.filter(c=> c.date >= today).sort((a,b)=> a.date.localeCompare(b.date));
     const past = S.classes.filter(c=> c.date < today).sort((a,b)=> b.date.localeCompare(a.date));
+    const hasBen = S.myBeneficiaries && S.myBeneficiaries.length > 0;
     let html = `<div class="es-card">
       <h2 class="es-h">Próximas clases</h2>
-      <p class="es-sub">Confirma tu asistencia para que la administración lleve el registro.</p>`;
+      <p class="es-sub">Confirma la asistencia — para ti, para un beneficiario, o para todos a la vez.</p>`;
     if(upcoming.length===0){ html += renderEmpty('No hay clases próximas programadas todavía.'); }
     else{
       upcoming.forEach(c=>{
-        html += `<div class="es-list-item">
-          <div><div style="font-weight:700;font-size:13px">${escapeHtml(c.title)}</div>
-          <div class="meta">${fmtDate(c.date)} · ${c.time.slice(0,5)} · ${escapeHtml(c.instructor||'Sin instructor')}</div></div>
-          <button class="es-btn ${c.confirmedByMe?'secondary':''}" data-confirm="${c.id}">${c.confirmedByMe? '✓ Asistencia confirmada' : 'Confirmar asistencia'}</button>
-        </div>`;
+        html += `<div style="border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+          <div class="es-flex-between">
+            <div><div style="font-weight:700;font-size:13px">${escapeHtml(c.title)}</div>
+            <div class="meta">${fmtDate(c.date)} · ${c.time.slice(0,5)} · ${escapeHtml(c.instructor||'Sin instructor')}</div></div>
+            ${hasBen ? `<button class="es-btn secondary" style="font-size:11.5px;padding:6px 10px" data-confirmall="${c.id}">Confirmar todos</button>` : ''}
+          </div>
+          <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg-alt);padding:6px 10px;border-radius:8px">
+              <span style="font-size:12.5px;font-weight:600">Tú (titular)</span>
+              <button class="es-btn ${c.confirmedByMe?'secondary':''}" style="padding:5px 10px;font-size:11.5px" data-confirm="${c.id}|">${c.confirmedByMe? '✓ Confirmado' : 'Confirmar'}</button>
+            </div>`;
+        (S.myBeneficiaries||[]).forEach(b=>{
+          const confirmed = (c.myConfirmedBeneficiaryIds||[]).includes(b.id);
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg-alt);padding:6px 10px;border-radius:8px">
+              <span style="font-size:12.5px;font-weight:600">${escapeHtml(b.fullName)}</span>
+              <button class="es-btn ${confirmed?'secondary':''}" style="padding:5px 10px;font-size:11.5px" data-confirm="${c.id}|${b.id}">${confirmed? '✓ Confirmado' : 'Confirmar'}</button>
+            </div>`;
+        });
+        html += `</div></div>`;
       });
     }
     html += `</div>`;
     if(past.length){
       html += `<div class="es-card" style="margin-top:16px">
         <h2 class="es-h">Historial</h2>
-        <p class="es-sub">Clases pasadas y tu asistencia confirmada.</p>`;
+        <p class="es-sub">Clases pasadas y quién asistió (titular y beneficiarios).</p>`;
       past.forEach(c=>{
+        const names = [];
+        if(c.confirmedByMe) names.push('Tú');
+        (S.myBeneficiaries||[]).forEach(b=>{ if((c.myConfirmedBeneficiaryIds||[]).includes(b.id)) names.push(b.fullName); });
         html += `<div class="es-list-item">
           <div><div style="font-weight:600;font-size:12.5px">${escapeHtml(c.title)}</div>
           <div class="meta">${fmtDate(c.date)} · ${c.time.slice(0,5)}</div></div>
-          <span class="es-badge ${c.confirmedByMe?'ok':'bad'}">${c.confirmedByMe?'Asististe':'No confirmada'}</span>
+          <span class="es-badge ${names.length?'ok':'bad'}">${names.length? escapeHtml(names.join(', ')) : 'No confirmada'}</span>
         </div>`;
       });
       html += `</div>`;
@@ -406,14 +486,17 @@
         html += `<div style="display:flex;flex-direction:column;gap:6px">`;
         attendees.forEach(u=>{
           const state = u.attended === true ? 'asistio' : (u.attended === false ? 'no' : 'sin');
+          const displayName = u.beneficiary_name
+            ? `${u.beneficiary_name} <span class="meta">(beneficiario de ${escapeHtml(u.account_name)})</span>`
+            : escapeHtml(u.account_name);
           html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--bg-alt);padding:6px 10px;border-radius:10px">
             <div style="display:flex;align-items:center;gap:6px">
               <img class="es-avatar-sm" src="${u.photo_url||svgAvatarPlaceholder()}"/>
-              <span style="font-size:12px;font-weight:600">${escapeHtml(u.full_name)}</span>
+              <span style="font-size:12px;font-weight:600">${displayName}</span>
             </div>
             <div style="display:flex;gap:4px">
-              <button class="es-btn ${state==='asistio'?'':'secondary'}" style="padding:4px 9px;font-size:11px" data-markattend="${c.id}|${u.id}|true">Asistió</button>
-              <button class="es-btn ${state==='no'?'danger':'secondary'}" style="padding:4px 9px;font-size:11px" data-markattend="${c.id}|${u.id}|false">No asistió</button>
+              <button class="es-btn ${state==='asistio'?'':'secondary'}" style="padding:4px 9px;font-size:11px" data-markattend="${c.id}|${u.attendance_id}|true">Asistió</button>
+              <button class="es-btn ${state==='no'?'danger':'secondary'}" style="padding:4px 9px;font-size:11px" data-markattend="${c.id}|${u.attendance_id}|false">No asistió</button>
             </div>
           </div>`;
         });
@@ -759,11 +842,38 @@
         const ecPhone = document.getElementById('es-p-ec-phone');
         if(ecName) body.emergencyContactName = ecName.value.trim();
         if(ecPhone) body.emergencyContactPhone = ecPhone.value.trim();
+        const hasBen = document.getElementById('es-p-has-ben');
+        if(hasBen) body.hasBeneficiaries = hasBen.checked;
         const r = await api('/users/me', { method:'PUT', body: JSON.stringify(body)});
         S.user = r.user;
         showToast('Perfil guardado'); render();
       }catch(err){ showToast(err.message); }
     };
+
+    const benAdd = document.getElementById('es-ben-add');
+    if(benAdd) benAdd.onclick = async ()=>{
+      const fullName = document.getElementById('es-ben-name').value.trim();
+      if(!fullName){ showToast('Escribe el nombre del beneficiario.'); return; }
+      try{
+        await api('/beneficiaries', { method:'POST', body: JSON.stringify({
+          fullName,
+          idType: document.getElementById('es-ben-idtype').value,
+          idNumber: document.getElementById('es-ben-idnumber').value.trim(),
+          sex: document.getElementById('es-ben-sex').value,
+        })});
+        const b = await api('/beneficiaries/me'); S.myBeneficiaries = b.beneficiaries;
+        showToast('Beneficiario agregado'); render();
+      }catch(err){ showToast(err.message); }
+    };
+    document.querySelectorAll('[data-delben]').forEach(el=>{
+      el.onclick = async ()=>{
+        try{
+          await api('/beneficiaries/'+el.getAttribute('data-delben'), { method:'DELETE' });
+          const b = await api('/beneficiaries/me'); S.myBeneficiaries = b.beneficiaries;
+          showToast('Beneficiario eliminado'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
 
     const cCreate = document.getElementById('es-c-create');
     if(cCreate) cCreate.onclick = async ()=>{
@@ -812,12 +922,22 @@
     });
     document.querySelectorAll('[data-confirm]').forEach(el=>{
       el.onclick = async ()=>{
-        const classId = el.getAttribute('data-confirm');
+        const [classId, beneficiaryId] = el.getAttribute('data-confirm').split('|');
         try{
-          const r = await api('/classes/'+classId+'/confirm', { method:'POST' });
+          const r = await api('/classes/'+classId+'/confirm', { method:'POST', body: JSON.stringify({ beneficiaryId: beneficiaryId || null }) });
           const c = await api('/classes'); S.classes = c.classes;
           showToast(r.confirmed ? 'Asistencia confirmada' : 'Confirmación retirada');
           render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+    document.querySelectorAll('[data-confirmall]').forEach(el=>{
+      el.onclick = async ()=>{
+        const classId = el.getAttribute('data-confirmall');
+        try{
+          await api('/classes/'+classId+'/confirm-all', { method:'POST' });
+          const c = await api('/classes'); S.classes = c.classes;
+          showToast('Confirmado para todos'); render();
         }catch(err){ showToast(err.message); }
       };
     });
