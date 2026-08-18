@@ -174,7 +174,7 @@
     const logoInner = S.logoUrl
       ? `<img src="${S.logoUrl}" alt="Logo Esturión"/>`
       : `<svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.6"><path d="M2 14c4-3 7-3 10 0s6 3 10 0" stroke-linecap="round"/><path d="M2 9c4-3 7-3 10 0s6 3 10 0" stroke-linecap="round" opacity="0.5"/></svg>`;
-    const canEditLogo = isSuper();
+    const canEditLogo = isAdminOrAbove();
     const sessionHtml = S.user
       ? `<div class="es-session"><span>${escapeHtml(S.user.fullName)} <span style="opacity:0.7">· ${ROLE_LABEL[S.user.role]}</span></span><button id="es-logout-btn">Salir</button></div>`
       : `<div class="es-session es-muted" style="color:rgba(255,255,255,0.8)">Club de natación</div>`;
@@ -191,7 +191,7 @@
         ${sessionHtml}
       </div>
       ${canEditLogo ? '<input type="file" id="es-logo-input" accept="image/*" style="display:none"/>' : ''}
-      <div class="es-wave"><svg viewBox="0 0 400 22" preserveAspectRatio="none"><path d="M0 12 Q 25 22 50 12 T 100 12 T 150 12 T 200 12 T 250 12 T 300 12 T 350 12 T 400 12 V22 H0 Z" fill="#F2FAF5"/></svg></div>
+      <div class="es-wave"><svg viewBox="0 0 400 22" preserveAspectRatio="none"><path d="M0 12 Q 25 22 50 12 T 100 12 T 150 12 T 200 12 T 250 12 T 300 12 T 350 12 T 400 12 V22 H0 Z" fill="#F3F5FC"/></svg></div>
     </div>`;
   }
 

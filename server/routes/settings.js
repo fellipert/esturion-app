@@ -11,7 +11,8 @@ router.get('/logo', async (req, res) => {
 });
 
 // Cambiar el logo del club — solo super_admin (es parte de la "estructura" del club)
-router.post('/logo', requireAuth, requireRole('super_admin'), upload.single('logo'), async (req, res) => {
+// Cambiar el logo del club — admin y super_admin
+router.post('/logo', requireAuth, requireRole('admin', 'super_admin'), upload.single('logo'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió ninguna imagen.' });
   const url = `/uploads/${req.file.filename}`;
   await pool.query(

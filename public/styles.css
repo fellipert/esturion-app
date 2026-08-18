@@ -1,16 +1,16 @@
   :root{
-    --bg:#F2FAF5;
-    --bg-alt:#E1F1E7;
-    --ink:#0C2A1E;
-    --navy:#0C3B29;
-    --teal:#1E8E5A;
-    --teal-light:#6FCF97;
-    --teal-dark:#146443;
+    --bg:#F3F5FC;
+    --bg-alt:#E7EBFA;
+    --ink:#101B3D;
+    --navy:#16225C;
+    --teal:#2F4AD1;
+    --teal-light:#8AA0F5;
+    --teal-dark:#1F35A6;
     --alert:#E4572E;
     --warn:#DB9A2C;
     --success:#2E9C63;
     --card:#FFFFFF;
-    --border:#CFE6D8;
+    --border:#D6DCF5;
     --radius:14px;
     --shadow: 0 4px 18px rgba(11,49,66,0.08);
     --font-display:'Space Grotesk', sans-serif;
@@ -107,10 +107,10 @@
   @media (max-width:640px){
     .es-layout{ flex-direction:column; }
     .es-sidebar{
-      width:100%; flex-direction:row; overflow-x:auto; border-right:none; border-bottom:1px solid var(--border);
-      padding:10px 12px; gap:6px;
+      width:100%; flex-direction:row; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      border-right:none; border-bottom:1px solid var(--border); padding:10px 12px; gap:6px;
     }
-    .es-sidebar button{ flex-direction:column; gap:4px; padding:8px 12px; font-size:10.5px; white-space:nowrap; }
+    .es-sidebar button{ flex-direction:column; gap:4px; padding:8px 12px; font-size:10.5px; white-space:nowrap; flex-shrink:0; }
     .es-main{ padding:18px 16px 26px 16px; }
   }
 
