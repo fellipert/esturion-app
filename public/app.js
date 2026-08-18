@@ -175,26 +175,38 @@
   // ---------- AUTH ----------
   function renderAuth(){
     const isLogin = S.authTab === 'login';
+    const isRecover = S.authTab === 'recover';
     return `
     <div class="es-auth-wrap">
       <div class="es-card">
-        <div class="es-auth-tabs">
+        ${!isRecover ? `<div class="es-auth-tabs">
           <button data-authtab="login" class="${isLogin?'active':''}">Ingresar</button>
           <button data-authtab="register" class="${!isLogin?'active':''}">Crear cuenta</button>
-        </div>
-        ${isLogin ? renderLoginForm() : renderRegisterForm()}
+        </div>` : ''}
+        ${isRecover ? renderRecoverForm() : (isLogin ? renderLoginForm() : renderRegisterForm())}
         ${S.authError ? `<div class="es-error">${escapeHtml(S.authError)}</div>` : ''}
-        ${!isLogin ? '<div class="es-hint">Las cuentas nuevas se crean como Cliente. Las cuentas de administración las asigna el súper administrador desde el panel de Socios.</div>' : ''}
+        ${(!isLogin && !isRecover) ? '<div class="es-hint">Las cuentas nuevas se crean como Cliente. Las cuentas de administración las asigna el súper administrador desde el panel de Socios.</div>' : ''}
       </div>
     </div>`;
   }
+  function pwField(id, placeholder){
+    return `<div style="position:relative">
+      <input class="es-input" type="password" id="${id}" placeholder="${placeholder}" style="padding-right:38px"/>
+      <button type="button" class="es-pw-toggle" data-target="${id}" title="Mostrar/ocultar contraseña"
+        style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:15px;padding:4px">👁</button>
+    </div>`;
+  }
+
   function renderLoginForm(){
     return `
       <label class="es-label">Correo</label>
       <input class="es-input" type="email" id="es-login-email" placeholder="tu@correo.com"/>
       <label class="es-label">Contraseña</label>
-      <input class="es-input" type="password" id="es-login-pass" placeholder="••••••••"/>
+      ${pwField('es-login-pass','••••••••')}
       <button class="es-btn" id="es-login-btn" style="margin-top:14px;width:100%">Ingresar</button>
+      <div style="text-align:center;margin-top:10px">
+        <a class="es-link" data-authtab="recover" style="font-size:12px">¿Olvidaste tu contraseña?</a>
+      </div>
     `;
   }
   function renderRegisterForm(){
@@ -206,10 +218,23 @@
       <label class="es-label">Teléfono</label>
       <input class="es-input" id="es-reg-phone" placeholder="Teléfono de contacto"/>
       <label class="es-label">Contraseña</label>
-      <input class="es-input" type="password" id="es-reg-pass" placeholder="Crea una contraseña"/>
+      ${pwField('es-reg-pass','Crea una contraseña')}
       <label class="es-label">Código de invitación</label>
       <input class="es-input" id="es-reg-invite" placeholder="Pídelo a la administración del club"/>
       <button class="es-btn" id="es-reg-btn" style="margin-top:14px;width:100%">Crear mi cuenta</button>
+    `;
+  }
+  function renderRecoverForm(){
+    return `
+      <div style="margin-bottom:10px"><a class="es-link" data-authtab="login" style="font-size:12px">← Volver a ingresar</a></div>
+      <p class="es-sub" style="margin-top:0">Escribe tu correo, el código de invitación del club, y tu nueva contraseña.</p>
+      <label class="es-label">Correo</label>
+      <input class="es-input" type="email" id="es-rec-email" placeholder="tu@correo.com"/>
+      <label class="es-label">Código de invitación</label>
+      <input class="es-input" id="es-rec-invite" placeholder="Pídelo a la administración del club"/>
+      <label class="es-label">Nueva contraseña</label>
+      ${pwField('es-rec-pass','Mínimo 4 caracteres')}
+      <button class="es-btn" id="es-rec-btn" style="margin-top:14px;width:100%">Restablecer contraseña</button>
     `;
   }
 
@@ -671,6 +696,8 @@
           <div>
             <a class="es-link" data-saverole="${u.id}" style="font-size:11px">guardar rol</a>
             &nbsp;·&nbsp;
+            <a class="es-link" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}" style="font-size:11px">restablecer contraseña</a>
+            &nbsp;·&nbsp;
             <a class="es-link" data-deluser="${u.id}" style="font-size:11px;color:var(--alert)">eliminar</a>
           </div>
         </div>`;
@@ -771,6 +798,31 @@
     if(logoutBtn) logoutBtn.onclick = ()=>{
       S.user=null; S.token=null; localStorage.removeItem(TOKEN_KEY);
       S.tab='perfil'; S.authTab='login'; render();
+    };
+
+    document.querySelectorAll('.es-pw-toggle').forEach(btn=>{
+      btn.onclick = ()=>{
+        const inp = document.getElementById(btn.getAttribute('data-target'));
+        if(!inp) return;
+        if(inp.type === 'password'){ inp.type='text'; btn.textContent='🙈'; }
+        else { inp.type='password'; btn.textContent='👁'; }
+      };
+    });
+
+    const recBtn = document.getElementById('es-rec-btn');
+    if(recBtn) recBtn.onclick = async ()=>{
+      const email = document.getElementById('es-rec-email').value.trim();
+      const inviteCode = document.getElementById('es-rec-invite').value.trim();
+      const newPassword = document.getElementById('es-rec-pass').value;
+      try{
+        const r = await api('/auth/reset-password', { method:'POST', body: JSON.stringify({ email, inviteCode, newPassword }) });
+        S.token = r.token; localStorage.setItem(TOKEN_KEY, r.token);
+        S.user = r.user; S.authError=''; S.tab='perfil'; S.authTab='login';
+        S.loading = true; render();
+        await loadDashboardData();
+        S.loading = false;
+        showToast('Contraseña actualizada. ¡Ya iniciaste sesión!');
+      }catch(err){ S.authError = err.message; render(); }
     };
 
     document.querySelectorAll('[data-authtab]').forEach(b=>{
@@ -1019,6 +1071,16 @@
           await api('/users/'+id+'/role', { method:'PUT', body: JSON.stringify({ role }) });
           const u = await api('/users'); S.allUsers = u.users;
           showToast('Rol actualizado'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+    document.querySelectorAll('[data-resetpass]').forEach(el=>{
+      el.onclick = async ()=>{
+        const [id, fullName, email] = el.getAttribute('data-resetpass').split('|');
+        if(!confirm(`¿Restablecer la contraseña de ${fullName}? Se generará una nueva contraseña aleatoria.`)) return;
+        try{
+          const r = await api('/users/'+id+'/reset-password', { method:'POST', body: JSON.stringify({}) });
+          alert(`Nueva contraseña para ${fullName} (${email}):\n\n${r.newPassword}\n\nCópiala y compártesela por un canal seguro (no queda guardada en ningún otro lugar).`);
         }catch(err){ showToast(err.message); }
       };
     });

@@ -97,4 +97,33 @@ router.get('/me', requireAuth, async (req, res) => {
   res.json({ user: publicUser(result.rows[0]) });
 });
 
+// Recuperar contraseña sin correo: se valida con el código de invitación del club
+// (más débil que un enlace por email, pero funcional mientras no haya SMTP configurado).
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, inviteCode, newPassword } = req.body;
+    if (!email || !inviteCode || !newPassword) {
+      return res.status(400).json({ error: 'Correo, código de invitación y nueva contraseña son obligatorios.' });
+    }
+    if (newPassword.length < 4) {
+      return res.status(400).json({ error: 'La nueva contraseña debe tener al menos 4 caracteres.' });
+    }
+    const codeRow = await pool.query("SELECT value FROM club_settings WHERE key = 'invite_code'");
+    const validCode = codeRow.rows[0]?.value;
+    if (!validCode || String(inviteCode).trim().toUpperCase() !== String(validCode).trim().toUpperCase()) {
+      return res.status(403).json({ error: 'Código de invitación incorrecto.' });
+    }
+    const cleanEmail = String(email).trim().toLowerCase();
+    const userRes = await pool.query('SELECT * FROM users WHERE email = $1', [cleanEmail]);
+    if (!userRes.rows.length) return res.status(404).json({ error: 'No existe una cuenta con ese correo.' });
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await pool.query('UPDATE users SET password_hash = $1 WHERE email = $2', [passwordHash, cleanEmail]);
+    const user = userRes.rows[0];
+    res.json({ token: signToken(user), user: publicUser(user) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'No se pudo restablecer la contraseña.' });
+  }
+});
+
 module.exports = router;

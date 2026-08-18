@@ -162,4 +162,17 @@ router.delete('/:id', requireAuth, requireRole('super_admin'), async (req, res) 
   res.json({ ok: true });
 });
 
+// Restablecer la contraseña de cualquier cuenta — solo super_admin.
+// Si no se envía newPassword, se genera una aleatoria y se devuelve una única vez.
+router.post('/:id/reset-password', requireAuth, requireRole('super_admin'), async (req, res) => {
+  let { newPassword } = req.body;
+  if (!newPassword || !newPassword.trim()) {
+    newPassword = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 4).toUpperCase();
+  }
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  const result = await pool.query('UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING email, full_name', [passwordHash, req.params.id]);
+  if (!result.rows.length) return res.status(404).json({ error: 'Usuario no encontrado.' });
+  res.json({ newPassword, email: result.rows[0].email, fullName: result.rows[0].full_name });
+});
+
 module.exports = router;
