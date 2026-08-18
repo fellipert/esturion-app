@@ -939,8 +939,10 @@
             <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Súper administrador</option>
           </select>
           <button class="es-btn secondary" style="width:100%" data-saverole="${u.id}">Guardar rol</button>
-          <button class="es-btn secondary" style="width:100%" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}">Restablecer contraseña</button>
-          <button class="es-btn secondary" style="width:100%;color:var(--alert);border-color:var(--alert)" data-deluser="${u.id}">Eliminar cuenta</button>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button class="es-btn secondary" style="padding:7px 12px;font-size:11.5px;min-height:auto" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}">Restablecer contraseña</button>
+            <button class="es-btn secondary" style="padding:7px 12px;font-size:11.5px;min-height:auto;color:var(--alert);border-color:var(--alert)" data-deluser="${u.id}">Eliminar cuenta</button>
+          </div>
         </div>`;
       }
       html += `</div>`;
