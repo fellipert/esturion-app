@@ -36,7 +36,7 @@ async function syncGeneratedClasses({ daysBack = 14, daysAhead = 90 } = {}) {
         await pool.query(
           `INSERT INTO classes (title, class_date, class_time, instructor, schedule_id, schedule_type, created_by)
            VALUES ($1,$2,$3,$4,$5,$6,$7)
-           ON CONFLICT (schedule_id, class_date) DO NOTHING`,
+           ON CONFLICT (schedule_id, class_date) WHERE schedule_id IS NOT NULL DO NOTHING`,
           [sch.title, dateStr, sch.start_time, sch.instructor, sch.id, sch.schedule_type, sch.created_by]
         );
       }
