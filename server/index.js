@@ -14,6 +14,10 @@ const { UPLOAD_DIR } = require('./middleware/upload');
 
 const app = express();
 
+// Detrás de Nginx (proxy inverso): sin esto, express-rate-limit revienta el proceso
+// al ver la cabecera X-Forwarded-For que agrega Nginx.
+app.set('trust proxy', 1);
+
 app.use(cors({ origin: process.env.CLIENT_ORIGIN || true, credentials: true }));
 app.use(express.json());
 
