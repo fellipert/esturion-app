@@ -919,32 +919,30 @@
       <p class="es-sub">${users.length} cuenta(s) registrada(s) en el club.</p>`;
     users.forEach(u=>{
       const isMe = u.id === S.user.id;
-      html += `<div class="es-list-item" style="align-items:flex-start;flex-direction:column;gap:8px">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;width:100%;gap:8px">
+      html += `<div class="es-list-item" style="align-items:stretch;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;width:100%;gap:8px;flex-wrap:wrap">
         <div style="display:flex;align-items:center;gap:10px">
           <img class="es-avatar-sm" src="${u.photoUrl||svgAvatarPlaceholder()}"/>
           <div><div style="font-weight:700;font-size:13px">${escapeHtml(u.fullName)}${isMe?' <span class="meta">(tú)</span>':''}</div>
           <div class="meta">${escapeHtml(u.email)} · ${escapeHtml(u.phone||'sin teléfono')}</div>
           ${u.role==='cliente' ? `<a class="es-link" data-toggleficha="${u.id}" style="font-size:11px">${S.expandedClientId===u.id?'ocultar ficha':'ver ficha'}</a>` : ''}
           </div>
+        </div>
+        <span class="es-badge ${u.role==='cliente'?'ok':'warn'}">${ROLE_LABEL[u.role]}</span>
         </div>`;
       if(isSuper() && !isMe){
-        html += `<div style="text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
-          <select class="es-input" style="width:auto;padding:5px 8px;font-size:12px" data-roleuser="${u.id}">
+        html += `<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding-top:8px;border-top:1px solid var(--border)">
+          <select class="es-input" style="max-width:240px" data-roleuser="${u.id}">
             <option value="cliente" ${u.role==='cliente'?'selected':''}>Cliente</option>
             <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
             <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Súper administrador</option>
           </select>
-          <div>
-            <a class="es-link" data-saverole="${u.id}" style="font-size:11px">guardar rol</a>
-            &nbsp;·&nbsp;
-            <a class="es-link" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}" style="font-size:11px">restablecer contraseña</a>
-            &nbsp;·&nbsp;
-            <a class="es-link" data-deluser="${u.id}" style="font-size:11px;color:var(--alert)">eliminar</a>
+          <div style="display:flex;flex-wrap:wrap;gap:14px">
+            <a class="es-link" data-saverole="${u.id}" style="font-size:12px">guardar rol</a>
+            <a class="es-link" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}" style="font-size:12px">restablecer contraseña</a>
+            <a class="es-link" data-deluser="${u.id}" style="font-size:12px;color:var(--alert)">eliminar</a>
           </div>
         </div>`;
-      } else {
-        html += `<span class="es-badge ${u.role==='cliente'?'ok':'warn'}">${ROLE_LABEL[u.role]}</span>`;
       }
       html += `</div>`;
       if(u.role==='cliente' && S.expandedClientId===u.id){
