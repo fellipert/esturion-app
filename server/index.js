@@ -10,6 +10,7 @@ const paymentRoutes = require('./routes/payments');
 const settingsRoutes = require('./routes/settings');
 const messageRoutes = require('./routes/messages');
 const beneficiaryRoutes = require('./routes/beneficiaries');
+const scheduleRoutes = require('./routes/schedules');
 const { UPLOAD_DIR } = require('./middleware/upload');
 
 const app = express();
@@ -32,6 +33,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/beneficiaries', beneficiaryRoutes);
+app.use('/api/schedules', scheduleRoutes);
 
 // Frontend estático (build de public/)
 app.use(express.static(path.join(__dirname, '..', 'public')));

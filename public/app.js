@@ -33,6 +33,12 @@
     composeScope: 'individual',
     inviteCode: null,
     expandedClientId: null,
+    weekData: null,
+    weekOffset: 0,
+    schedules: [],
+    myPreference: null,
+    showPrefPicker: false,
+    showNewScheduleForm: false,
   };
 
   function isSuper(){ return S.user && S.user.role === 'super_admin'; }
@@ -112,6 +118,7 @@
       const c = await api('/classes');
       S.classes = c.classes;
     }catch(e){ S.classes = []; }
+    try{ const s = await api('/schedules'); S.schedules = s.schedules; }catch(e){}
     if(isAdminOrAbove()){
       try{ const u = await api('/users'); S.allUsers = u.users; }catch(e){}
       try{ const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members; }catch(e){}
@@ -122,8 +129,17 @@
       try{ const p = await api('/payments/me'); S.myPayment = p; }catch(e){}
       try{ S.myStats = await api('/classes/attendance-stats/me'); }catch(e){}
       try{ const b = await api('/beneficiaries/me'); S.myBeneficiaries = b.beneficiaries; }catch(e){}
+      try{ const pr = await api('/schedules/preference/me'); S.myPreference = pr.preference; }catch(e){}
     }
     try{ const m = await api('/messages/me'); S.myMessages = m.messages; }catch(e){}
+  }
+
+  async function loadWeekData(offset){
+    S.weekOffset = offset;
+    try{
+      S.weekData = await api('/classes/week?offset='+offset);
+    }catch(e){}
+    render();
   }
 
   // ---------- render ----------
@@ -269,7 +285,7 @@
   function renderDashboardContent(){
     let html = '';
     if(S.tab === 'perfil') html += renderPerfil();
-    else if(S.tab === 'clases') html += isSuper() ? renderClasesSuper() : (isAdminOrAbove() ? renderClasesAdminView() : renderClasesCliente());
+    else if(S.tab === 'clases') html += renderClasesCalendar();
     else if(S.tab === 'asistencia' && isAdminOrAbove()) html += renderAsistenciaAdmin();
     else if(S.tab === 'pagos') html += isAdminOrAbove() ? renderPagosAdmin() : renderPagosCliente();
     else if(S.tab === 'socios' && isAdminOrAbove()) html += renderSocios();
@@ -380,6 +396,188 @@
         </div>
       </div>`;
     }
+    return html;
+  }
+
+  // ----- Calendario de clases (horarios semanales + clases puntuales) -----
+  function scheduleTypeLabel(t){
+    return { regular:'Regular', opcional:'Opcional', extraordinaria:'Extraordinaria', manual:'Extraordinaria' }[t] || t;
+  }
+  function classStatusBadge(status){
+    if(status==='cancelada') return '<span class="es-badge bad">Cancelada</span>';
+    if(status==='finalizada') return '<span class="es-badge warn">Finalizada</span>';
+    return '<span class="es-badge ok">Disponible</span>';
+  }
+
+  function renderClasesCalendar(){
+    let html = '';
+    const staff = isAdminOrAbove();
+
+    if(!staff){
+      if(S.myPreference && S.myPreference.active){
+        html += `<div class="es-card" style="margin-bottom:16px">
+          <h2 class="es-h">Mi horario habitual</h2>
+          <p style="font-size:15px;font-weight:700;margin:6px 0">${S.myPreference.dayName} — ${S.myPreference.startTime.slice(0,5)}</p>
+          <button class="es-btn secondary" id="es-change-pref" style="font-size:12px">Cambiar horario habitual</button>
+        </div>`;
+      } else if(S.myPreference && !S.myPreference.active){
+        html += `<div class="es-alertbar">⚠ Tu horario habitual (${S.myPreference.dayName} ${S.myPreference.startTime.slice(0,5)}) fue deshabilitado por la administración. Elige uno nuevo.</div>`;
+        html += `<div style="margin-bottom:16px"><button class="es-btn secondary" id="es-change-pref" style="font-size:12px">Elegir horario habitual</button></div>`;
+      } else {
+        html += `<div class="es-card" style="margin-bottom:16px">
+          <h2 class="es-h">Mi horario habitual</h2>
+          <p class="es-sub">Todavía no has elegido un horario habitual.</p>
+          <button class="es-btn secondary" id="es-change-pref" style="font-size:12px">Elegir horario habitual</button>
+        </div>`;
+      }
+      if(S.showPrefPicker){
+        const active = (S.schedules||[]).filter(s=>s.active);
+        html += `<div class="es-card" style="margin-bottom:16px">
+          <h2 class="es-h" style="font-size:14px">Elige tu horario habitual</h2>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">
+          ${active.length===0 ? '<p class="es-sub">No hay horarios activos todavía.</p>' : active.map(s=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg-alt);padding:8px 10px;border-radius:8px">
+              <span style="font-size:12.5px;font-weight:600">${s.dayName} — ${s.startTime.slice(0,5)} ${s.scheduleType==='opcional'?'(opcional)':''}</span>
+              <button class="es-btn" style="padding:5px 10px;font-size:11px" data-setpref="${s.id}">Elegir</button>
+            </div>`).join('')}
+          </div>
+        </div>`;
+      }
+    }
+
+    if(staff){
+      html += renderScheduleConfigCard();
+      html += renderExtraClassForm();
+    }
+
+    html += renderWeekCalendar();
+    return html;
+  }
+
+  function renderScheduleConfigCard(){
+    let html = `<div class="es-card" style="margin-bottom:16px">
+      <h2 class="es-h">Configuración de horarios semanales</h2>
+      <p class="es-sub">Activa o desactiva horarios recurrentes — el cambio se refleja para todos los clientes automáticamente.</p>
+      <table class="es-table" style="margin-top:8px"><thead><tr><th>Día</th><th>Hora</th><th>Tipo</th><th>Estado</th><th></th></tr></thead><tbody>`;
+    (S.schedules||[]).forEach(s=>{
+      html += `<tr>
+        <td>${s.dayName}</td>
+        <td>${s.startTime.slice(0,5)}</td>
+        <td>${scheduleTypeLabel(s.scheduleType)}</td>
+        <td><span class="es-badge ${s.active?'ok':'bad'}">${s.active?'Activo':'Inactivo'}</span></td>
+        <td style="text-align:right;white-space:nowrap">
+          <a class="es-link" data-toggleschedule="${s.id}" style="font-size:11px">${s.active?'desactivar':'activar'}</a>
+          &nbsp;·&nbsp;
+          <a class="es-link" data-delschedule="${s.id}" style="font-size:11px;color:var(--alert)">eliminar</a>
+        </td>
+      </tr>`;
+    });
+    html += `</tbody></table>
+      <button class="es-btn secondary" id="es-toggle-newschedule" style="margin-top:12px">${S.showNewScheduleForm?'Cancelar':'+ Crear nuevo horario semanal'}</button>`;
+    if(S.showNewScheduleForm){
+      html += `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <label class="es-label">Día de la semana</label>
+        <select class="es-input" id="es-ns-day">
+          ${['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'].map((d,i)=>`<option value="${i}">${d}</option>`).join('')}
+        </select>
+        <label class="es-label">Hora</label>
+        <input class="es-input" type="time" id="es-ns-time" value="18:00"/>
+        <label class="es-label">Tipo</label>
+        <select class="es-input" id="es-ns-type">
+          <option value="regular">Regular</option>
+          <option value="opcional">Opcional</option>
+        </select>
+        <label class="es-label">Instructor/a (opcional)</label>
+        <input class="es-input" id="es-ns-instructor" placeholder="Nombre del instructor"/>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12.5px;font-weight:600">
+          <input type="checkbox" id="es-ns-active" checked/> Activo desde ya
+        </label>
+        <button class="es-btn" id="es-ns-create" style="margin-top:12px">Guardar horario</button>
+      </div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  function renderExtraClassForm(){
+    return `<div class="es-card" style="margin-bottom:16px">
+      <h2 class="es-h">Agregar clase extraordinaria</h2>
+      <p class="es-sub">Para una fecha puntual que no se repite. Si necesitas que se repita cada semana, usa "Crear nuevo horario semanal" arriba.</p>
+      <label class="es-label">Título</label>
+      <input class="es-input" id="es-c-title" placeholder="Ej. Clase especial de técnica"/>
+      <label class="es-label">Fecha</label>
+      <input class="es-input" type="date" id="es-c-date" value="${todayStr()}"/>
+      <label class="es-label">Hora</label>
+      <input class="es-input" type="time" id="es-c-time" value="18:00"/>
+      <label class="es-label">Instructor/a</label>
+      <input class="es-input" id="es-c-instructor" placeholder="Nombre del instructor"/>
+      <button class="es-btn" id="es-c-create" style="margin-top:14px">Publicar clase</button>
+    </div>`;
+  }
+
+  function renderWeekCalendar(){
+    const wd = S.weekData;
+    let html = `<div class="es-card">
+      <div class="es-flex-between" style="margin-bottom:10px;flex-wrap:wrap;gap:8px">
+        <h2 class="es-h" style="margin:0">Calendario semanal</h2>
+        <div style="display:flex;gap:6px">
+          <button class="es-btn secondary" style="padding:5px 10px;font-size:12px" data-weeknav="prev">← Anterior</button>
+          <button class="es-btn secondary" style="padding:5px 10px;font-size:12px" data-weeknav="today">Hoy</button>
+          <button class="es-btn secondary" style="padding:5px 10px;font-size:12px" data-weeknav="next">Siguiente →</button>
+        </div>
+      </div>`;
+    if(!wd){ html += renderEmpty('Cargando calendario…'); html += `</div>`; return html; }
+    html += `<p class="es-sub" style="margin-top:-4px">${fmtDate(wd.weekStart)} — ${fmtDate(wd.weekEnd)}</p>`;
+    const staff = isAdminOrAbove();
+    wd.days.forEach(day=>{
+      html += `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-weight:700;font-size:13px">${day.dayName} <span class="meta">· ${fmtDate(day.date)}</span></div>`;
+      if(day.classes.length===0){
+        html += `<div class="meta" style="font-size:12px;margin-top:4px">Sin clases este día.</div>`;
+      } else {
+        day.classes.forEach(c=>{
+          const cancelled = c.status==='cancelada';
+          html += `<div style="margin-top:8px;padding:8px 10px;background:var(--bg-alt);border-radius:8px;${cancelled?'opacity:0.6':''}">
+            <div class="es-flex-between" style="flex-wrap:wrap;gap:6px">
+              <div>
+                <span style="font-weight:700;font-size:13px">${c.time.slice(0,5)}</span>
+                <span class="es-badge ${c.scheduleType==='opcional'?'warn':'ok'}" style="margin-left:6px">${scheduleTypeLabel(c.scheduleType)}</span>
+                ${classStatusBadge(c.status)}
+              </div>
+              ${staff ? `<div>
+                ${cancelled
+                  ? `<a class="es-link" data-restoreclass="${c.id}" style="font-size:11px">reactivar</a>`
+                  : `<a class="es-link" data-cancelclass="${c.id}" style="font-size:11px">cancelar</a>`}
+                &nbsp;·&nbsp;
+                <a class="es-link" data-delclass="${c.id}" style="font-size:11px;color:var(--alert)">eliminar</a>
+              </div>` : ''}
+            </div>`;
+          if(!staff && !cancelled){
+            html += `<div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+                <span style="font-size:12px;font-weight:600">Tú (titular)</span>
+                <div style="display:flex;gap:8px;align-items:center">
+                  ${c.scheduleId ? `<a class="es-link" data-setprefclass="${c.scheduleId}" style="font-size:10.5px">usar como habitual</a>` : ''}
+                  <button class="es-btn ${c.confirmedByMe?'secondary':''}" style="padding:4px 9px;font-size:11px" data-confirm="${c.id}|">${c.confirmedByMe?'✓ Confirmado':'Confirmar'}</button>
+                </div>
+              </div>`;
+            (S.myBeneficiaries||[]).forEach(b=>{
+              const bconf = (c.myConfirmedBeneficiaryIds||[]).includes(b.id);
+              html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span style="font-size:12px;font-weight:600">${escapeHtml(b.fullName)}</span>
+                <button class="es-btn ${bconf?'secondary':''}" style="padding:4px 9px;font-size:11px" data-confirm="${c.id}|${b.id}">${bconf?'✓ Confirmado':'Confirmar'}</button>
+              </div>`;
+            });
+            html += `</div>`;
+          } else if(!staff && cancelled){
+            html += `<div class="meta" style="font-size:11.5px;margin-top:4px">Esta clase fue cancelada.</div>`;
+          }
+          html += `</div>`;
+        });
+      }
+      html += `</div>`;
+    });
+    html += `</div>`;
     return html;
   }
 
@@ -880,7 +1078,10 @@
       b.onclick = ()=>{ S.authTab = b.getAttribute('data-authtab'); S.authError=''; render(); };
     });
     document.querySelectorAll('[data-tab]').forEach(b=>{
-      b.onclick = ()=>{ S.tab = b.getAttribute('data-tab'); render(); if(S.tab==='asistencia') loadAllAttendance(); };
+      b.onclick = ()=>{ S.tab = b.getAttribute('data-tab'); render();
+        if(S.tab==='asistencia') loadAllAttendance();
+        if(S.tab==='clases' && !S.weekData) loadWeekData(S.weekOffset);
+      };
     });
 
     const loginBtn = document.getElementById('es-login-btn');
@@ -1001,7 +1202,7 @@
       if(!title || !date || !time){ showToast('Completa título, fecha y hora.'); return; }
       try{
         await api('/classes', { method:'POST', body: JSON.stringify({ title, date, time, instructor }) });
-        const c = await api('/classes'); S.classes = c.classes;
+        await refreshClasses();
         showToast('Clase publicada'); render();
       }catch(err){ showToast(err.message); }
     };
@@ -1027,13 +1228,36 @@
         }catch(err){ showToast(err.message); }
       };
     });
+    async function refreshClasses(){
+      try{ const c = await api('/classes'); S.classes = c.classes; }catch(e){}
+      if(S.weekData){ try{ S.weekData = await api('/classes/week?offset='+S.weekOffset); }catch(e){} }
+    }
+
     document.querySelectorAll('[data-delclass]').forEach(el=>{
       el.onclick = async ()=>{
         const id = el.getAttribute('data-delclass');
         try{
           await api('/classes/'+id, { method:'DELETE' });
-          const c = await api('/classes'); S.classes = c.classes;
+          await refreshClasses();
           showToast('Clase eliminada'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+    document.querySelectorAll('[data-cancelclass]').forEach(el=>{
+      el.onclick = async ()=>{
+        try{
+          await api('/classes/'+el.getAttribute('data-cancelclass')+'/cancel', { method:'PUT' });
+          await refreshClasses();
+          showToast('Clase cancelada'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+    document.querySelectorAll('[data-restoreclass]').forEach(el=>{
+      el.onclick = async ()=>{
+        try{
+          await api('/classes/'+el.getAttribute('data-restoreclass')+'/restore', { method:'PUT' });
+          await refreshClasses();
+          showToast('Clase reactivada'); render();
         }catch(err){ showToast(err.message); }
       };
     });
@@ -1042,7 +1266,7 @@
         const [classId, beneficiaryId] = el.getAttribute('data-confirm').split('|');
         try{
           const r = await api('/classes/'+classId+'/confirm', { method:'POST', body: JSON.stringify({ beneficiaryId: beneficiaryId || null }) });
-          const c = await api('/classes'); S.classes = c.classes;
+          await refreshClasses();
           showToast(r.confirmed ? 'Asistencia confirmada' : 'Confirmación retirada');
           render();
         }catch(err){ showToast(err.message); }
@@ -1053,8 +1277,76 @@
         const classId = el.getAttribute('data-confirmall');
         try{
           await api('/classes/'+classId+'/confirm-all', { method:'POST' });
-          const c = await api('/classes'); S.classes = c.classes;
+          await refreshClasses();
           showToast('Confirmado para todos'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+
+    document.querySelectorAll('[data-weeknav]').forEach(el=>{
+      el.onclick = ()=>{
+        const dir = el.getAttribute('data-weeknav');
+        if(dir==='today') loadWeekData(0);
+        else if(dir==='prev') loadWeekData(S.weekOffset-1);
+        else loadWeekData(S.weekOffset+1);
+      };
+    });
+
+    const changePref = document.getElementById('es-change-pref');
+    if(changePref) changePref.onclick = ()=>{ S.showPrefPicker = !S.showPrefPicker; render(); };
+
+    async function setPreference(scheduleId){
+      try{
+        await api('/schedules/preference/me', { method:'PUT', body: JSON.stringify({ scheduleId }) });
+        const pr = await api('/schedules/preference/me'); S.myPreference = pr.preference;
+        S.showPrefPicker = false;
+        showToast('Horario habitual actualizado'); render();
+      }catch(err){ showToast(err.message); }
+    }
+    document.querySelectorAll('[data-setpref]').forEach(el=>{
+      el.onclick = ()=> setPreference(el.getAttribute('data-setpref'));
+    });
+    document.querySelectorAll('[data-setprefclass]').forEach(el=>{
+      el.onclick = ()=> setPreference(el.getAttribute('data-setprefclass'));
+    });
+
+    const toggleNewSchedule = document.getElementById('es-toggle-newschedule');
+    if(toggleNewSchedule) toggleNewSchedule.onclick = ()=>{ S.showNewScheduleForm = !S.showNewScheduleForm; render(); };
+
+    const nsCreate = document.getElementById('es-ns-create');
+    if(nsCreate) nsCreate.onclick = async ()=>{
+      try{
+        await api('/schedules', { method:'POST', body: JSON.stringify({
+          dayOfWeek: Number(document.getElementById('es-ns-day').value),
+          startTime: document.getElementById('es-ns-time').value,
+          scheduleType: document.getElementById('es-ns-type').value,
+          instructor: document.getElementById('es-ns-instructor').value.trim(),
+          active: document.getElementById('es-ns-active').checked,
+          recurring: true,
+        })});
+        const s = await api('/schedules'); S.schedules = s.schedules;
+        S.showNewScheduleForm = false;
+        await refreshClasses();
+        showToast('Horario creado'); render();
+      }catch(err){ showToast(err.message); }
+    };
+    document.querySelectorAll('[data-toggleschedule]').forEach(el=>{
+      el.onclick = async ()=>{
+        try{
+          await api('/schedules/'+el.getAttribute('data-toggleschedule')+'/toggle', { method:'PUT' });
+          const s = await api('/schedules'); S.schedules = s.schedules;
+          await refreshClasses();
+          showToast('Horario actualizado'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+    document.querySelectorAll('[data-delschedule]').forEach(el=>{
+      el.onclick = async ()=>{
+        if(!confirm('¿Eliminar este horario semanal? Las clases ya generadas no se borran, solo dejan de repetirse.')) return;
+        try{
+          await api('/schedules/'+el.getAttribute('data-delschedule'), { method:'DELETE' });
+          const s = await api('/schedules'); S.schedules = s.schedules;
+          showToast('Horario eliminado'); render();
         }catch(err){ showToast(err.message); }
       };
     });

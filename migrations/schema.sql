@@ -51,15 +51,48 @@ CREATE TABLE IF NOT EXISTS beneficiaries (
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Plantillas de horario semanal ("Lunes 6:30pm es una clase regular"). El calendario que ve
+-- cada cliente se GENERA a partir de estas plantillas activas — no se duplica por usuario.
+CREATE TABLE IF NOT EXISTS class_schedules (
+  id            SERIAL PRIMARY KEY,
+  day_of_week   SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6), -- 0=domingo … 6=sábado
+  start_time    TIME NOT NULL,
+  end_time      TIME,
+  title         VARCHAR(150) NOT NULL DEFAULT 'Clase de natación',
+  instructor    VARCHAR(120),
+  schedule_type VARCHAR(20) NOT NULL DEFAULT 'regular' CHECK (schedule_type IN ('regular','opcional','extraordinaria')),
+  recurring     BOOLEAN NOT NULL DEFAULT true,
+  active        BOOLEAN NOT NULL DEFAULT true,
+  start_date    DATE,
+  end_date      DATE,
+  notes         TEXT,
+  created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- El horario habitual/preferido de cada cliente (uno solo por cliente).
+CREATE TABLE IF NOT EXISTS user_class_preferences (
+  id                    SERIAL PRIMARY KEY,
+  user_id               INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  preferred_schedule_id INTEGER REFERENCES class_schedules(id) ON DELETE SET NULL,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS classes (
   id            SERIAL PRIMARY KEY,
   title         VARCHAR(150) NOT NULL,
   class_date    DATE NOT NULL,
   class_time    TIME NOT NULL,
   instructor    VARCHAR(120),
+  schedule_id   INTEGER REFERENCES class_schedules(id) ON DELETE SET NULL,
+  schedule_type VARCHAR(20) NOT NULL DEFAULT 'manual' CHECK (schedule_type IN ('regular','opcional','extraordinaria','manual')),
+  status        VARCHAR(20) NOT NULL DEFAULT 'programada' CHECK (status IN ('programada','cancelada','finalizada')),
   created_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_classes_schedule_date ON classes(schedule_id, class_date) WHERE schedule_id IS NOT NULL;
 
 -- "confirmed" = se reservó/confirmó que va a ir. "attended" = lo que realmente pasó, lo marca
 -- un admin después de la clase (NULL = aún sin marcar). "beneficiary_id" NULL = la reserva es
@@ -112,6 +145,8 @@ CREATE INDEX IF NOT EXISTS idx_attendance_user ON attendance(user_id);
 CREATE INDEX IF NOT EXISTS idx_beneficiaries_client ON beneficiaries(client_user_id);
 CREATE INDEX IF NOT EXISTS idx_payments_user ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_classes_date ON classes(class_date);
+CREATE INDEX IF NOT EXISTS idx_schedules_day ON class_schedules(day_of_week);
+CREATE INDEX IF NOT EXISTS idx_schedules_active ON class_schedules(active);
 CREATE INDEX IF NOT EXISTS idx_messages_recipient_user ON messages(recipient_user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_recipient_class ON messages(recipient_class_id);
 
@@ -122,6 +157,17 @@ INSERT INTO users (email, password_hash, role, full_name) VALUES
   ('susigonzalezbetancur.25@gmail.com', '$2a$10$PsTX3U2JNZVwKSibnwo3H.ID204jvnOs9XTmDSdUs8/hFIsoZTa6u', 'admin', 'Susi González Betancur')
 ON CONFLICT (email) DO NOTHING;
 
--- Código de invitación inicial para el registro de clientes. Cámbialo desde "Socios" (súper admin).
+-- Código de invitación inicial para el registro de clientes. Cámbialo desde "Clientes" (admin/súper admin).
 INSERT INTO club_settings (key, value) VALUES ('invite_code', 'ESTURION2026')
 ON CONFLICT (key) DO NOTHING;
+
+-- Horarios base semanales. Los regulares quedan activos por defecto; los opcionales
+-- (sábado 3pm y domingo) inician inactivos hasta que administración los habilite.
+INSERT INTO class_schedules (day_of_week, start_time, title, schedule_type, recurring, active, notes) VALUES
+  (1, '18:30', 'Clase de natación', 'regular', true, true, 'Lunes 6:30 p.m.'),
+  (3, '05:00', 'Clase de natación', 'regular', true, true, 'Miércoles 5:00 a.m.'),
+  (5, '18:30', 'Clase de natación', 'regular', true, true, 'Viernes 6:30 p.m.'),
+  (6, '14:00', 'Clase de natación', 'regular', true, true, 'Sábado 2:00 p.m.'),
+  (6, '15:00', 'Clase de natación', 'opcional', true, false, 'Sábado 3:00 p.m. — horario opcional'),
+  (0, '09:00', 'Clase de natación', 'opcional', true, false, 'Domingo — horario configurable por administración')
+ON CONFLICT DO NOTHING;

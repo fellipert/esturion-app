@@ -1,13 +1,21 @@
 const express = require('express');
 const { pool } = require('../db');
 const { requireAuth, requireRole } = require('../middleware/auth');
+const { syncGeneratedClasses, DAY_NAMES, todayStr, addDays } = require('../lib/scheduleSync');
 
 const router = express.Router();
 
-// Listar clases (todos los usuarios autenticados), con conteo de confirmados
-// y qué reservas propias (titular y/o beneficiarios) tiene el usuario actual.
+// Listar clases (ventana de -14 a +90 días), con conteo de confirmados y qué reservas
+// propias (titular y/o beneficiarios) tiene el usuario actual. Genera automáticamente
+// las clases que falten a partir de los horarios semanales activos.
 router.get('/', requireAuth, async (req, res) => {
-  const classesRes = await pool.query('SELECT * FROM classes ORDER BY class_date ASC, class_time ASC');
+  await syncGeneratedClasses();
+  const rangeStart = addDays(todayStr(), -14);
+  const rangeEnd = addDays(todayStr(), 90);
+  const classesRes = await pool.query(
+    'SELECT * FROM classes WHERE class_date BETWEEN $1 AND $2 ORDER BY class_date ASC, class_time ASC',
+    [rangeStart, rangeEnd]
+  );
   const attendanceRes = await pool.query(
     `SELECT class_id, COUNT(*) FILTER (WHERE confirmed) AS confirmed_count
      FROM attendance GROUP BY class_id`
@@ -30,6 +38,9 @@ router.get('/', requireAuth, async (req, res) => {
     date: c.class_date,
     time: c.class_time,
     instructor: c.instructor,
+    scheduleId: c.schedule_id,
+    scheduleType: c.schedule_type,
+    status: c.status,
     confirmedCount: countsByClass[c.id] || 0,
     confirmedByMe: !!(mineByClass[c.id] && mineByClass[c.id].self),
     myConfirmedBeneficiaryIds: (mineByClass[c.id] && mineByClass[c.id].beneficiaryIds) || [],
@@ -37,20 +48,80 @@ router.get('/', requireAuth, async (req, res) => {
   res.json({ classes });
 });
 
-// Crear clase — solo super_admin (gestiona la estructura del club)
-router.post('/', requireAuth, requireRole('super_admin'), async (req, res) => {
+// Vista semanal para el calendario: una semana completa (domingo a sábado), con navegación
+// por "offset" (0 = semana actual, 1 = siguiente, -1 = anterior, etc.)
+router.get('/week', requireAuth, async (req, res) => {
+  await syncGeneratedClasses();
+  const offset = parseInt(req.query.offset || '0', 10) || 0;
+  const today = new Date();
+  const start = new Date(today);
+  start.setDate(today.getDate() - today.getDay() + offset * 7);
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = addDays(startStr, 6);
+
+  const classesRes = await pool.query(
+    'SELECT * FROM classes WHERE class_date BETWEEN $1 AND $2 ORDER BY class_date ASC, class_time ASC',
+    [startStr, endStr]
+  );
+  const ids = classesRes.rows.map(c => c.id);
+  const attendanceRes = ids.length
+    ? await pool.query(
+        `SELECT class_id, COUNT(*) FILTER (WHERE confirmed) AS confirmed_count FROM attendance
+         WHERE class_id = ANY($1::int[]) GROUP BY class_id`,
+        [ids]
+      )
+    : { rows: [] };
+  const mineRes = ids.length
+    ? await pool.query(
+        `SELECT class_id, beneficiary_id FROM attendance
+         WHERE user_id = $1 AND confirmed = true AND class_id = ANY($2::int[])`,
+        [req.user.id, ids]
+      )
+    : { rows: [] };
+  const countsByClass = Object.fromEntries(attendanceRes.rows.map(r => [r.class_id, Number(r.confirmed_count)]));
+  const mineByClass = {};
+  mineRes.rows.forEach(r => {
+    if (!mineByClass[r.class_id]) mineByClass[r.class_id] = { self: false, beneficiaryIds: [] };
+    if (r.beneficiary_id) mineByClass[r.class_id].beneficiaryIds.push(r.beneficiary_id);
+    else mineByClass[r.class_id].self = true;
+  });
+
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const dateStr = addDays(startStr, i);
+    const dayClasses = classesRes.rows
+      .filter(c => c.class_date === dateStr)
+      .map(c => ({
+        id: c.id,
+        title: c.title,
+        time: c.class_time,
+        instructor: c.instructor,
+        scheduleId: c.schedule_id,
+        scheduleType: c.schedule_type,
+        status: c.status,
+        confirmedCount: countsByClass[c.id] || 0,
+        confirmedByMe: !!(mineByClass[c.id] && mineByClass[c.id].self),
+        myConfirmedBeneficiaryIds: (mineByClass[c.id] && mineByClass[c.id].beneficiaryIds) || [],
+      }));
+    days.push({ date: dateStr, dayOfWeek: i, dayName: DAY_NAMES[i], classes: dayClasses });
+  }
+  res.json({ weekStart: startStr, weekEnd: endStr, offset, days });
+});
+
+// Crear clase puntual/extraordinaria — admin y super_admin
+router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   const { title, date, time, instructor } = req.body;
   if (!title || !date || !time) return res.status(400).json({ error: 'Título, fecha y hora son obligatorios.' });
   const result = await pool.query(
-    `INSERT INTO classes (title, class_date, class_time, instructor, created_by)
-     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+    `INSERT INTO classes (title, class_date, class_time, instructor, schedule_type, created_by)
+     VALUES ($1,$2,$3,$4,'extraordinaria',$5) RETURNING *`,
     [title, date, time, instructor || null, req.user.id]
   );
   res.status(201).json({ class: result.rows[0] });
 });
 
-// Editar clase — solo super_admin
-router.put('/:id', requireAuth, requireRole('super_admin'), async (req, res) => {
+// Editar clase — admin y super_admin
+router.put('/:id', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   const { title, date, time, instructor } = req.body;
   const result = await pool.query(
     `UPDATE classes SET title = COALESCE($1,title), class_date = COALESCE($2,class_date),
@@ -61,8 +132,22 @@ router.put('/:id', requireAuth, requireRole('super_admin'), async (req, res) => 
   res.json({ class: result.rows[0] });
 });
 
-// Eliminar clase — solo super_admin
-router.delete('/:id', requireAuth, requireRole('super_admin'), async (req, res) => {
+// Cancelar una clase específica (queda visible marcada como CANCELADA) — admin y super_admin
+router.put('/:id/cancel', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const result = await pool.query(`UPDATE classes SET status = 'cancelada' WHERE id = $1 RETURNING *`, [req.params.id]);
+  if (!result.rows.length) return res.status(404).json({ error: 'Clase no encontrada.' });
+  res.json({ class: result.rows[0] });
+});
+
+// Reactivar una clase cancelada — admin y super_admin
+router.put('/:id/restore', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const result = await pool.query(`UPDATE classes SET status = 'programada' WHERE id = $1 RETURNING *`, [req.params.id]);
+  if (!result.rows.length) return res.status(404).json({ error: 'Clase no encontrada.' });
+  res.json({ class: result.rows[0] });
+});
+
+// Eliminar clase por completo — admin y super_admin
+router.delete('/:id', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   await pool.query('DELETE FROM classes WHERE id = $1', [req.params.id]);
   res.json({ ok: true });
 });
