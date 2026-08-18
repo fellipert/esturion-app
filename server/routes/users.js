@@ -6,6 +6,16 @@ const { upload } = require('../middleware/upload');
 
 const router = express.Router();
 
+function ageFromBirthDate(birthDate) {
+  if (!birthDate) return null;
+  const today = new Date();
+  const bd = new Date(birthDate);
+  let age = today.getFullYear() - bd.getFullYear();
+  const m = today.getMonth() - bd.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < bd.getDate())) age--;
+  return age;
+}
+
 function publicUser(row) {
   const base = {
     id: row.id,
@@ -18,8 +28,14 @@ function publicUser(row) {
   };
   if (row.role === 'cliente') {
     base.client = {
+      birthDate: row.birth_date || null,
+      age: ageFromBirthDate(row.birth_date),
+      eps: row.eps || null,
+      personalContactPhone: row.personal_contact_phone || null,
       emergencyContactName: row.emergency_contact_name || null,
       emergencyContactPhone: row.emergency_contact_phone || null,
+      emergencyContactRelationship: row.emergency_contact_relationship || null,
+      medicalCondition: row.medical_condition || null,
       monthlyFee: row.monthly_fee != null ? Number(row.monthly_fee) : 180000,
       notes: row.notes || null,
       active: row.active !== false,
@@ -30,7 +46,9 @@ function publicUser(row) {
 }
 
 const SELECT_WITH_CLIENT = `
-  SELECT u.*, c.emergency_contact_name, c.emergency_contact_phone, c.monthly_fee, c.notes, c.active
+  SELECT u.*, c.birth_date, c.eps, c.personal_contact_phone,
+         c.emergency_contact_name, c.emergency_contact_phone, c.emergency_contact_relationship,
+         c.medical_condition, c.monthly_fee, c.notes, c.active, c.has_beneficiaries
   FROM users u LEFT JOIN clients c ON c.user_id = u.id
 `;
 
@@ -51,15 +69,28 @@ router.get('/me', requireAuth, async (req, res) => {
 // Actualizar mi propio perfil (cualquier rol). Si soy cliente, también puedo
 // actualizar mi contacto de emergencia (no mi cuota mensual, esa la fija la administración).
 router.put('/me', requireAuth, async (req, res) => {
-  const { fullName, phone, emergencyContactName, emergencyContactPhone, hasBeneficiaries } = req.body;
+  const {
+    fullName, phone, hasBeneficiaries,
+    birthDate, eps, personalContactPhone,
+    emergencyContactName, emergencyContactPhone, emergencyContactRelationship,
+    medicalCondition,
+  } = req.body;
   await pool.query(
     `UPDATE users SET full_name = COALESCE($1, full_name), phone = $2 WHERE id = $3`,
     [fullName || null, phone || null, req.user.id]
   );
   if (req.user.role === 'cliente') {
     await ensureClientRow(req.user.id);
-    const fields = ['emergency_contact_name = $1', 'emergency_contact_phone = $2'];
-    const params = [emergencyContactName || null, emergencyContactPhone || null];
+    const fields = [
+      'birth_date = $1', 'eps = $2', 'personal_contact_phone = $3',
+      'emergency_contact_name = $4', 'emergency_contact_phone = $5', 'emergency_contact_relationship = $6',
+      'medical_condition = $7',
+    ];
+    const params = [
+      birthDate || null, eps || null, personalContactPhone || null,
+      emergencyContactName || null, emergencyContactPhone || null, emergencyContactRelationship || null,
+      medicalCondition || null,
+    ];
     if (typeof hasBeneficiaries === 'boolean') {
       fields.push(`has_beneficiaries = $${params.length + 1}`);
       params.push(hasBeneficiaries);

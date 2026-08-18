@@ -32,6 +32,7 @@
     sentMessages: [],
     composeScope: 'individual',
     inviteCode: null,
+    expandedClientId: null,
   };
 
   function isSuper(){ return S.user && S.user.role === 'super_admin'; }
@@ -296,19 +297,39 @@
       <input class="es-input" value="${escapeHtml(user.email)}" disabled style="opacity:0.6"/>
       <label class="es-label">Teléfono</label>
       <input class="es-input" id="es-p-phone" value="${escapeHtml(user.phone||'')}"/>`;
-    if(user.role === 'cliente'){
-      const cl = user.client || {};
-      html += `
-      <label class="es-label">Contacto de emergencia — nombre</label>
-      <input class="es-input" id="es-p-ec-name" value="${escapeHtml(cl.emergencyContactName||'')}"/>
-      <label class="es-label">Contacto de emergencia — teléfono</label>
-      <input class="es-input" id="es-p-ec-phone" value="${escapeHtml(cl.emergencyContactPhone||'')}"/>
-      <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:600;color:var(--navy)">
-        <input type="checkbox" id="es-p-has-ben" ${cl.hasBeneficiaries?'checked':''}/> Tengo beneficiarios (hijos/familiares) en el club
-      </label>`;
-    }
     html += `<button class="es-btn" id="es-p-save" style="margin-top:14px">Guardar cambios</button>
     </div>`;
+    if(user.role === 'cliente'){
+      const cl = user.client || {};
+      html += `<div class="es-card" style="max-width:480px;margin-top:16px">
+        <h2 class="es-h">Ficha del socio</h2>
+        <p class="es-sub">Esta información solo la ves tú y la administración del club.</p>
+        <label class="es-label">Fecha de nacimiento</label>
+        <input class="es-input" type="date" id="es-p-birthdate" value="${cl.birthDate||''}" max="${todayStr()}"/>
+        <label class="es-label">Edad</label>
+        <input class="es-input" value="${cl.age!=null? cl.age+' años' : 'Se calcula al guardar la fecha de nacimiento'}" disabled style="opacity:0.6"/>
+        <label class="es-label">EPS</label>
+        <input class="es-input" id="es-p-eps" value="${escapeHtml(cl.eps||'')}" placeholder="Ej. Sura, Nueva EPS..."/>
+        <label class="es-label">Contacto personal</label>
+        <input class="es-input" id="es-p-personal-contact" value="${escapeHtml(cl.personalContactPhone||'')}" placeholder="Teléfono de contacto personal"/>
+        <label class="es-label">Nombre del contacto de emergencia</label>
+        <input class="es-input" id="es-p-ec-name" value="${escapeHtml(cl.emergencyContactName||'')}"/>
+        <label class="es-label">Teléfono del contacto de emergencia</label>
+        <input class="es-input" id="es-p-ec-phone" value="${escapeHtml(cl.emergencyContactPhone||'')}"/>
+        <label class="es-label">Parentesco del contacto de emergencia</label>
+        <select class="es-input" id="es-p-ec-relationship">
+          <option value="">Selecciona...</option>
+          ${['Madre','Padre','Hermano/a','Cónyuge','Hijo/a','Abuelo/a','Tío/a','Amigo/a','Otro'].map(r=>
+            `<option value="${r}" ${cl.emergencyContactRelationship===r?'selected':''}>${r}</option>`).join('')}
+        </select>
+        <label class="es-label">Enfermedad o lesión física</label>
+        <textarea class="es-input" id="es-p-medical" rows="3" placeholder="Alergias, condiciones médicas, lesiones a tener en cuenta...">${escapeHtml(cl.medicalCondition||'')}</textarea>
+        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:600;color:var(--navy)">
+          <input type="checkbox" id="es-p-has-ben" ${cl.hasBeneficiaries?'checked':''}/> Tengo beneficiarios (hijos/familiares) en el club
+        </label>
+        <button class="es-btn" id="es-p-save-ficha" style="margin-top:14px">Guardar ficha</button>
+      </div>`;
+    }
     if(user.role === 'cliente' && (user.client||{}).hasBeneficiaries){
       html += `<div class="es-card" style="max-width:480px;margin-top:16px">
         <h2 class="es-h">Mis beneficiarios</h2>
@@ -682,11 +703,14 @@
       <p class="es-sub">${users.length} cuenta(s) registrada(s) en el club.</p>`;
     users.forEach(u=>{
       const isMe = u.id === S.user.id;
-      html += `<div class="es-list-item" style="align-items:flex-start">
+      html += `<div class="es-list-item" style="align-items:flex-start;flex-direction:column;gap:8px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;width:100%;gap:8px">
         <div style="display:flex;align-items:center;gap:10px">
           <img class="es-avatar-sm" src="${u.photoUrl||svgAvatarPlaceholder()}"/>
           <div><div style="font-weight:700;font-size:13px">${escapeHtml(u.fullName)}${isMe?' <span class="meta">(tú)</span>':''}</div>
-          <div class="meta">${escapeHtml(u.email)} · ${escapeHtml(u.phone||'sin teléfono')}</div></div>
+          <div class="meta">${escapeHtml(u.email)} · ${escapeHtml(u.phone||'sin teléfono')}</div>
+          ${u.role==='cliente' ? `<a class="es-link" data-toggleficha="${u.id}" style="font-size:11px">${S.expandedClientId===u.id?'ocultar ficha':'ver ficha'}</a>` : ''}
+          </div>
         </div>`;
       if(isSuper() && !isMe){
         html += `<div style="text-align:right;display:flex;flex-direction:column;gap:6px;align-items:flex-end">
@@ -707,9 +731,34 @@
         html += `<span class="es-badge ${u.role==='cliente'?'ok':'warn'}">${ROLE_LABEL[u.role]}</span>`;
       }
       html += `</div>`;
+      if(u.role==='cliente' && S.expandedClientId===u.id){
+        html += renderFichaSocio(u);
+      }
+      html += `</div>`;
     });
     html += `</div>`;
     return html;
+  }
+
+  function renderFichaSocio(u){
+    const cl = u.client || {};
+    const REL_LABEL = { '':'—' };
+    return `<div style="width:100%;background:var(--bg-alt);border-radius:10px;padding:12px;font-size:12.5px">
+      <div class="es-grid" style="gap:6px 18px">
+        <div>
+          <div><b>Fecha de nacimiento:</b> ${fmtDate(cl.birthDate)}</div>
+          <div><b>Edad:</b> ${cl.age!=null? cl.age+' años' : '—'}</div>
+          <div><b>EPS:</b> ${escapeHtml(cl.eps||'—')}</div>
+          <div><b>Contacto personal:</b> ${escapeHtml(cl.personalContactPhone||'—')}</div>
+        </div>
+        <div>
+          <div><b>Contacto de emergencia:</b> ${escapeHtml(cl.emergencyContactName||'—')}</div>
+          <div><b>Teléfono de emergencia:</b> ${escapeHtml(cl.emergencyContactPhone||'—')}</div>
+          <div><b>Parentesco:</b> ${escapeHtml(cl.emergencyContactRelationship||'—')}</div>
+        </div>
+      </div>
+      <div style="margin-top:8px"><b>Enfermedad o lesión física:</b> ${escapeHtml(cl.medicalCondition||'Ninguna registrada')}</div>
+    </div>`;
   }
 
   function renderMensajes(){
@@ -892,15 +941,28 @@
           fullName: document.getElementById('es-p-name').value.trim(),
           phone: document.getElementById('es-p-phone').value.trim(),
         };
-        const ecName = document.getElementById('es-p-ec-name');
-        const ecPhone = document.getElementById('es-p-ec-phone');
-        if(ecName) body.emergencyContactName = ecName.value.trim();
-        if(ecPhone) body.emergencyContactPhone = ecPhone.value.trim();
-        const hasBen = document.getElementById('es-p-has-ben');
-        if(hasBen) body.hasBeneficiaries = hasBen.checked;
         const r = await api('/users/me', { method:'PUT', body: JSON.stringify(body)});
         S.user = r.user;
         showToast('Perfil guardado'); render();
+      }catch(err){ showToast(err.message); }
+    };
+
+    const pSaveFicha = document.getElementById('es-p-save-ficha');
+    if(pSaveFicha) pSaveFicha.onclick = async ()=>{
+      try{
+        const body = {
+          birthDate: document.getElementById('es-p-birthdate').value || null,
+          eps: document.getElementById('es-p-eps').value.trim(),
+          personalContactPhone: document.getElementById('es-p-personal-contact').value.trim(),
+          emergencyContactName: document.getElementById('es-p-ec-name').value.trim(),
+          emergencyContactPhone: document.getElementById('es-p-ec-phone').value.trim(),
+          emergencyContactRelationship: document.getElementById('es-p-ec-relationship').value,
+          medicalCondition: document.getElementById('es-p-medical').value.trim(),
+          hasBeneficiaries: document.getElementById('es-p-has-ben').checked,
+        };
+        const r = await api('/users/me', { method:'PUT', body: JSON.stringify(body)});
+        S.user = r.user;
+        showToast('Ficha guardada'); render();
       }catch(err){ showToast(err.message); }
     };
 
@@ -1065,6 +1127,13 @@
         showToast('Cuenta creada'); render();
       }catch(err){ showToast(err.message); }
     };
+    document.querySelectorAll('[data-toggleficha]').forEach(el=>{
+      el.onclick = ()=>{
+        const id = Number(el.getAttribute('data-toggleficha'));
+        S.expandedClientId = S.expandedClientId === id ? null : id;
+        render();
+      };
+    });
     document.querySelectorAll('[data-saverole]').forEach(el=>{
       el.onclick = async ()=>{
         const id = el.getAttribute('data-saverole');

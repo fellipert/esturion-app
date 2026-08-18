@@ -24,14 +24,19 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- Perfil extendido, solo para usuarios con role = 'cliente'
 CREATE TABLE IF NOT EXISTS clients (
-  user_id                 INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-  emergency_contact_name  VARCHAR(120),
-  emergency_contact_phone VARCHAR(30),
-  monthly_fee             NUMERIC(10,2) NOT NULL DEFAULT 180000,
-  notes                   TEXT,
-  active                  BOOLEAN NOT NULL DEFAULT true,
-  has_beneficiaries       BOOLEAN NOT NULL DEFAULT false,
-  created_at              TIMESTAMPTZ NOT NULL DEFAULT now()
+  user_id                        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  birth_date                     DATE,
+  eps                             VARCHAR(120),
+  personal_contact_phone         VARCHAR(30),
+  emergency_contact_name         VARCHAR(120),
+  emergency_contact_phone        VARCHAR(30),
+  emergency_contact_relationship VARCHAR(60),
+  medical_condition               TEXT,
+  monthly_fee                    NUMERIC(10,2) NOT NULL DEFAULT 180000,
+  notes                          TEXT,
+  active                         BOOLEAN NOT NULL DEFAULT true,
+  has_beneficiaries              BOOLEAN NOT NULL DEFAULT false,
+  created_at                     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Beneficiarios de un cliente (hijos, familiares, etc.) que pueden reservar clases
