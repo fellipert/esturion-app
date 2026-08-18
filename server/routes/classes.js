@@ -60,7 +60,8 @@ router.get('/week', requireAuth, async (req, res) => {
   const endStr = addDays(startStr, 6);
 
   const classesRes = await pool.query(
-    'SELECT * FROM classes WHERE class_date BETWEEN $1 AND $2 ORDER BY class_date ASC, class_time ASC',
+    `SELECT * FROM classes WHERE class_date BETWEEN $1 AND $2 AND status != 'cancelada'
+     ORDER BY class_date ASC, class_time ASC`,
     [startStr, endStr]
   );
   const ids = classesRes.rows.map(c => c.id);
