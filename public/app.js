@@ -15,7 +15,7 @@
     tab: 'perfil',
     toast: '',
     classes: [],
-    allUsers: [],        // todos los roles (para la pestaña Socios)
+    allUsers: [],        // todos los roles (para la pestaña Clientes)
     paymentAlerts: [],
     paymentStatuses: [], // solo clientes (para pestaña Pagos)
     myPayment: null,
@@ -186,7 +186,7 @@
         </div>` : ''}
         ${isRecover ? renderRecoverForm() : (isLogin ? renderLoginForm() : renderRegisterForm())}
         ${S.authError ? `<div class="es-error">${escapeHtml(S.authError)}</div>` : ''}
-        ${(!isLogin && !isRecover) ? '<div class="es-hint">Las cuentas nuevas se crean como Cliente. Las cuentas de administración las asigna el súper administrador desde el panel de Socios.</div>' : ''}
+        ${(!isLogin && !isRecover) ? '<div class="es-hint">Las cuentas nuevas se crean como Cliente. Las cuentas de administración las asigna el súper administrador desde el panel de Clientes.</div>' : ''}
       </div>
     </div>`;
   }
@@ -251,9 +251,9 @@
 
   function navTabs(){
     return isSuper()
-      ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Socios'],['mensajes','Mensajes']]
+      ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Clientes'],['mensajes','Mensajes']]
       : isAdminOrAbove()
-        ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Socios'],['mensajes','Mensajes']]
+        ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Clientes'],['mensajes','Mensajes']]
         : [['perfil','Mi perfil'],['clases','Clases'],['pagos','Mi mensualidad'],['mensajes','Mensajes']];
   }
 
@@ -299,10 +299,10 @@
       <input class="es-input" id="es-p-phone" value="${escapeHtml(user.phone||'')}"/>`;
     html += `<button class="es-btn" id="es-p-save" style="margin-top:14px">Guardar cambios</button>
     </div>`;
-    if(user.role === 'cliente'){
+    {
       const cl = user.client || {};
       html += `<div class="es-card" style="max-width:480px;margin-top:16px">
-        <h2 class="es-h">Ficha del socio</h2>
+        <h2 class="es-h">Ficha personal</h2>
         <p class="es-sub">Esta información solo la ves tú y la administración del club.</p>
         <label class="es-label">Fecha de nacimiento</label>
         <input class="es-input" type="date" id="es-p-birthdate" value="${cl.birthDate||''}" max="${todayStr()}"/>
@@ -324,9 +324,9 @@
         </select>
         <label class="es-label">Enfermedad o lesión física</label>
         <textarea class="es-input" id="es-p-medical" rows="3" placeholder="Alergias, condiciones médicas, lesiones a tener en cuenta...">${escapeHtml(cl.medicalCondition||'')}</textarea>
-        <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:600;color:var(--navy)">
+        ${user.role === 'cliente' ? `<label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;font-weight:600;color:var(--navy)">
           <input type="checkbox" id="es-p-has-ben" ${cl.hasBeneficiaries?'checked':''}/> Tengo beneficiarios (hijos/familiares) en el club
-        </label>
+        </label>` : ''}
         <button class="es-btn" id="es-p-save-ficha" style="margin-top:14px">Guardar ficha</button>
       </div>`;
     }
@@ -699,7 +699,7 @@
       </div>`;
     }
     html += `<div class="es-card">
-      <h2 class="es-h">Todos los usuarios</h2>
+      <h2 class="es-h">Todos los usuarios y clientes</h2>
       <p class="es-sub">${users.length} cuenta(s) registrada(s) en el club.</p>`;
     users.forEach(u=>{
       const isMe = u.id === S.user.id;
@@ -958,8 +958,9 @@
           emergencyContactPhone: document.getElementById('es-p-ec-phone').value.trim(),
           emergencyContactRelationship: document.getElementById('es-p-ec-relationship').value,
           medicalCondition: document.getElementById('es-p-medical').value.trim(),
-          hasBeneficiaries: document.getElementById('es-p-has-ben').checked,
         };
+        const hasBenEl = document.getElementById('es-p-has-ben');
+        if(hasBenEl) body.hasBeneficiaries = hasBenEl.checked;
         const r = await api('/users/me', { method:'PUT', body: JSON.stringify(body)});
         S.user = r.user;
         showToast('Ficha guardada'); render();

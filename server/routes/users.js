@@ -26,22 +26,20 @@ function publicUser(row) {
     photoUrl: row.photo_url,
     createdAt: row.created_at,
   };
-  if (row.role === 'cliente') {
-    base.client = {
-      birthDate: row.birth_date || null,
-      age: ageFromBirthDate(row.birth_date),
-      eps: row.eps || null,
-      personalContactPhone: row.personal_contact_phone || null,
-      emergencyContactName: row.emergency_contact_name || null,
-      emergencyContactPhone: row.emergency_contact_phone || null,
-      emergencyContactRelationship: row.emergency_contact_relationship || null,
-      medicalCondition: row.medical_condition || null,
-      monthlyFee: row.monthly_fee != null ? Number(row.monthly_fee) : 180000,
-      notes: row.notes || null,
-      active: row.active !== false,
-      hasBeneficiaries: row.has_beneficiaries === true,
-    };
-  }
+  base.client = {
+    birthDate: row.birth_date || null,
+    age: ageFromBirthDate(row.birth_date),
+    eps: row.eps || null,
+    personalContactPhone: row.personal_contact_phone || null,
+    emergencyContactName: row.emergency_contact_name || null,
+    emergencyContactPhone: row.emergency_contact_phone || null,
+    emergencyContactRelationship: row.emergency_contact_relationship || null,
+    medicalCondition: row.medical_condition || null,
+    monthlyFee: row.monthly_fee != null ? Number(row.monthly_fee) : 180000,
+    notes: row.notes || null,
+    active: row.active !== false,
+    hasBeneficiaries: row.has_beneficiaries === true,
+  };
   return base;
 }
 
@@ -79,25 +77,26 @@ router.put('/me', requireAuth, async (req, res) => {
     `UPDATE users SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone) WHERE id = $3`,
     [fullName || null, phone || null, req.user.id]
   );
-  if (req.user.role === 'cliente') {
-    await ensureClientRow(req.user.id);
-    const fields = [
-      'birth_date = $1', 'eps = $2', 'personal_contact_phone = $3',
-      'emergency_contact_name = $4', 'emergency_contact_phone = $5', 'emergency_contact_relationship = $6',
-      'medical_condition = $7',
-    ];
-    const params = [
-      birthDate || null, eps || null, personalContactPhone || null,
-      emergencyContactName || null, emergencyContactPhone || null, emergencyContactRelationship || null,
-      medicalCondition || null,
-    ];
-    if (typeof hasBeneficiaries === 'boolean') {
-      fields.push(`has_beneficiaries = $${params.length + 1}`);
-      params.push(hasBeneficiaries);
-    }
-    params.push(req.user.id);
-    await pool.query(`UPDATE clients SET ${fields.join(', ')} WHERE user_id = $${params.length}`, params);
+  // La ficha personal (fecha de nacimiento, EPS, contacto de emergencia, etc.) aplica a
+  // cualquier rol. "hasBeneficiaries" solo tiene sentido para clientes, pero no molesta
+  // guardarlo igual si llega vacío.
+  await ensureClientRow(req.user.id);
+  const fields = [
+    'birth_date = $1', 'eps = $2', 'personal_contact_phone = $3',
+    'emergency_contact_name = $4', 'emergency_contact_phone = $5', 'emergency_contact_relationship = $6',
+    'medical_condition = $7',
+  ];
+  const params = [
+    birthDate || null, eps || null, personalContactPhone || null,
+    emergencyContactName || null, emergencyContactPhone || null, emergencyContactRelationship || null,
+    medicalCondition || null,
+  ];
+  if (typeof hasBeneficiaries === 'boolean') {
+    fields.push(`has_beneficiaries = $${params.length + 1}`);
+    params.push(hasBeneficiaries);
   }
+  params.push(req.user.id);
+  await pool.query(`UPDATE clients SET ${fields.join(', ')} WHERE user_id = $${params.length}`, params);
   const result = await pool.query(SELECT_WITH_CLIENT + ' WHERE u.id = $1', [req.user.id]);
   res.json({ user: publicUser(result.rows[0]) });
 });
