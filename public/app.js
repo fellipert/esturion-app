@@ -930,13 +930,15 @@
         <div class="meta" style="margin-top:8px;word-break:break-word">${escapeHtml(u.email)}</div>
         <div class="meta">${escapeHtml(u.phone||'Sin teléfono registrado')}</div>
         ${u.role==='cliente' ? `<a class="es-link" data-toggleficha="${u.id}" style="font-size:12px;margin-top:6px">${S.expandedClientId===u.id?'▲ Ocultar ficha':'▼ Ver ficha completa'}</a>` : ''}`;
-      if(isSuper() && !isMe){
+      const canManage = isAdminOrAbove() && !isMe && !(S.user.role==='admin' && u.role==='super_admin');
+      if(canManage){
+        const canAssignSuper = isSuper();
         html += `<div style="display:flex;flex-direction:column;gap:8px;width:100%;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
           <label class="es-label" style="margin-top:0">Cambiar rol</label>
           <select class="es-input" data-roleuser="${u.id}">
             <option value="cliente" ${u.role==='cliente'?'selected':''}>Cliente</option>
             <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
-            <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Súper administrador</option>
+            ${canAssignSuper ? `<option value="super_admin" ${u.role==='super_admin'?'selected':''}>Súper administrador</option>` : ''}
           </select>
           <button class="es-btn secondary" style="width:100%" data-saverole="${u.id}">Guardar rol</button>
           <div style="display:flex;flex-wrap:wrap;gap:8px">

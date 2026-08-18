@@ -144,14 +144,24 @@ router.post('/', requireAuth, requireRole('super_admin'), async (req, res) => {
   res.status(201).json({ user: publicUser(full.rows[0]) });
 });
 
-// Cambiar el rol de un usuario — solo super_admin
-router.put('/:id/role', requireAuth, requireRole('super_admin'), async (req, res) => {
+// Cambiar el rol de un usuario — admin y super_admin (un admin no puede asignar el rol
+// de súper administrador, ni modificar a quien ya es súper administrador)
+router.put('/:id/role', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   const { role } = req.body;
   if (!['cliente', 'admin', 'super_admin'].includes(role)) {
     return res.status(400).json({ error: 'Rol inválido.' });
   }
   if (Number(req.params.id) === req.user.id) {
     return res.status(400).json({ error: 'No puedes cambiar tu propio rol.' });
+  }
+  if (req.user.role === 'admin') {
+    if (role === 'super_admin') {
+      return res.status(403).json({ error: 'Solo el súper administrador puede asignar ese rol.' });
+    }
+    const target = await pool.query('SELECT role FROM users WHERE id = $1', [req.params.id]);
+    if (target.rows[0]?.role === 'super_admin') {
+      return res.status(403).json({ error: 'No puedes modificar la cuenta del súper administrador.' });
+    }
   }
   const result = await pool.query('UPDATE users SET role = $1 WHERE id = $2 RETURNING *', [role, req.params.id]);
   if (!result.rows.length) return res.status(404).json({ error: 'Usuario no encontrado.' });
@@ -183,18 +193,31 @@ router.put('/:id', requireAuth, requireRole('super_admin'), async (req, res) => 
   res.json({ user: publicUser(full.rows[0]) });
 });
 
-// Eliminar una cuenta — solo super_admin
-router.delete('/:id', requireAuth, requireRole('super_admin'), async (req, res) => {
+// Eliminar una cuenta — admin y super_admin (un admin no puede eliminar al súper administrador)
+router.delete('/:id', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   if (Number(req.params.id) === req.user.id) {
     return res.status(400).json({ error: 'No puedes eliminar tu propia cuenta.' });
+  }
+  if (req.user.role === 'admin') {
+    const target = await pool.query('SELECT role FROM users WHERE id = $1', [req.params.id]);
+    if (target.rows[0]?.role === 'super_admin') {
+      return res.status(403).json({ error: 'No puedes eliminar la cuenta del súper administrador.' });
+    }
   }
   await pool.query('DELETE FROM users WHERE id = $1', [req.params.id]);
   res.json({ ok: true });
 });
 
-// Restablecer la contraseña de cualquier cuenta — solo super_admin.
-// Si no se envía newPassword, se genera una aleatoria y se devuelve una única vez.
-router.post('/:id/reset-password', requireAuth, requireRole('super_admin'), async (req, res) => {
+// Restablecer la contraseña de cualquier cuenta — admin y super_admin (un admin no puede
+// restablecer la contraseña del súper administrador). Si no se envía newPassword, se genera
+// una aleatoria y se devuelve una única vez.
+router.post('/:id/reset-password', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  if (req.user.role === 'admin') {
+    const target = await pool.query('SELECT role FROM users WHERE id = $1', [req.params.id]);
+    if (target.rows[0]?.role === 'super_admin') {
+      return res.status(403).json({ error: 'No puedes restablecer la contraseña del súper administrador.' });
+    }
+  }
   let { newPassword } = req.body;
   if (!newPassword || !newPassword.trim()) {
     newPassword = Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 4).toUpperCase();
