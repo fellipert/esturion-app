@@ -46,6 +46,11 @@
   function isAdminOrAbove(){ return S.user && (S.user.role === 'admin' || S.user.role === 'super_admin'); }
 
   function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function addDaysStr(dateStr, days){
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d.toISOString().slice(0,10);
+  }
   function fmtDate(s){
     if(!s) return '—';
     const d = new Date(s+'T00:00:00');
@@ -714,7 +719,13 @@
     const classes = S.classes.filter(c => c.date === filterDate);
     let html = `<div class="es-card" style="margin-bottom:16px">
       <h2 class="es-h">Filtrar por día</h2>
-      <p class="es-sub">Elige una fecha para ver y confirmar quién asistió realmente ese día.</p>
+      <p class="es-sub">Toca las flechas para moverte día a día, o usa el calendario para ir directo a una fecha.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+        <button class="es-btn secondary" style="padding:8px 14px" data-daynav="prev">← Día anterior</button>
+        <button class="es-btn secondary" style="padding:8px 14px" data-daynav="today">Hoy</button>
+        <button class="es-btn secondary" style="padding:8px 14px" data-daynav="next">Día siguiente →</button>
+      </div>
+      <label class="es-label" style="margin-top:12px">O elige una fecha exacta</label>
       <input class="es-input" type="date" id="es-asist-date" value="${filterDate}" style="max-width:220px"/>
     </div>`;
     html += `<div class="es-card">
@@ -1381,6 +1392,17 @@
       render();
       loadAllAttendance();
     };
+    document.querySelectorAll('[data-daynav]').forEach(el=>{
+      el.onclick = ()=>{
+        const dir = el.getAttribute('data-daynav');
+        const current = S.asistenciaDate || todayStr();
+        if(dir==='today') S.asistenciaDate = todayStr();
+        else if(dir==='prev') S.asistenciaDate = addDaysStr(current, -1);
+        else S.asistenciaDate = addDaysStr(current, 1);
+        render();
+        loadAllAttendance();
+      };
+    });
 
     document.querySelectorAll('[data-markattend]').forEach(el=>{
       el.onclick = async ()=>{
