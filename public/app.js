@@ -919,36 +919,34 @@
       <p class="es-sub">${users.length} cuenta(s) registrada(s) en el club.</p>`;
     users.forEach(u=>{
       const isMe = u.id === S.user.id;
-      html += `<div class="es-list-item" style="align-items:stretch;flex-direction:column;gap:10px">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;width:100%;gap:8px;flex-wrap:wrap">
+      html += `<div class="es-list-item" style="align-items:stretch;flex-direction:column;gap:0">
         <div style="display:flex;align-items:center;gap:10px">
           <img class="es-avatar-sm" src="${u.photoUrl||svgAvatarPlaceholder()}"/>
-          <div><div style="font-weight:700;font-size:13px">${escapeHtml(u.fullName)}${isMe?' <span class="meta">(tú)</span>':''}</div>
-          <div class="meta">${escapeHtml(u.email)} · ${escapeHtml(u.phone||'sin teléfono')}</div>
-          ${u.role==='cliente' ? `<a class="es-link" data-toggleficha="${u.id}" style="font-size:11px">${S.expandedClientId===u.id?'ocultar ficha':'ver ficha'}</a>` : ''}
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;font-size:13.5px">${escapeHtml(u.fullName)}${isMe?' <span class="meta">(tú)</span>':''}</div>
+            <span class="es-badge ${u.role==='cliente'?'ok':'warn'}" style="margin-top:3px;display:inline-block">${ROLE_LABEL[u.role]}</span>
           </div>
         </div>
-        <span class="es-badge ${u.role==='cliente'?'ok':'warn'}">${ROLE_LABEL[u.role]}</span>
-        </div>`;
+        <div class="meta" style="margin-top:8px;word-break:break-word">${escapeHtml(u.email)}</div>
+        <div class="meta">${escapeHtml(u.phone||'Sin teléfono registrado')}</div>
+        ${u.role==='cliente' ? `<a class="es-link" data-toggleficha="${u.id}" style="font-size:12px;margin-top:6px">${S.expandedClientId===u.id?'▲ Ocultar ficha':'▼ Ver ficha completa'}</a>` : ''}`;
       if(isSuper() && !isMe){
-        html += `<div style="display:flex;flex-direction:column;gap:8px;width:100%;padding-top:8px;border-top:1px solid var(--border)">
-          <select class="es-input" style="max-width:240px" data-roleuser="${u.id}">
+        html += `<div style="display:flex;flex-direction:column;gap:8px;width:100%;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <label class="es-label" style="margin-top:0">Cambiar rol</label>
+          <select class="es-input" data-roleuser="${u.id}">
             <option value="cliente" ${u.role==='cliente'?'selected':''}>Cliente</option>
             <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
             <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Súper administrador</option>
           </select>
-          <div style="display:flex;flex-wrap:nowrap;gap:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px">
-            <a class="es-link" data-saverole="${u.id}" style="font-size:12px;flex-shrink:0;white-space:nowrap">guardar rol</a>
-            <a class="es-link" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}" style="font-size:12px;flex-shrink:0;white-space:nowrap">restablecer contraseña</a>
-            <a class="es-link" data-deluser="${u.id}" style="font-size:12px;color:var(--alert);flex-shrink:0;white-space:nowrap">eliminar</a>
-          </div>
+          <button class="es-btn secondary" style="width:100%" data-saverole="${u.id}">Guardar rol</button>
+          <button class="es-btn secondary" style="width:100%" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}">Restablecer contraseña</button>
+          <button class="es-btn secondary" style="width:100%;color:var(--alert);border-color:var(--alert)" data-deluser="${u.id}">Eliminar cuenta</button>
         </div>`;
       }
       html += `</div>`;
       if(u.role==='cliente' && S.expandedClientId===u.id){
         html += renderFichaSocio(u);
       }
-      html += `</div>`;
     });
     html += `</div>`;
     return html;
