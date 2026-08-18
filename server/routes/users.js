@@ -76,7 +76,7 @@ router.put('/me', requireAuth, async (req, res) => {
     medicalCondition,
   } = req.body;
   await pool.query(
-    `UPDATE users SET full_name = COALESCE($1, full_name), phone = $2 WHERE id = $3`,
+    `UPDATE users SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone) WHERE id = $3`,
     [fullName || null, phone || null, req.user.id]
   );
   if (req.user.role === 'cliente') {
@@ -165,7 +165,7 @@ router.put('/:id/role', requireAuth, requireRole('super_admin'), async (req, res
 router.put('/:id', requireAuth, requireRole('super_admin'), async (req, res) => {
   const { fullName, phone, monthlyFee, emergencyContactName, emergencyContactPhone, active } = req.body;
   const result = await pool.query(
-    `UPDATE users SET full_name = COALESCE($1, full_name), phone = $2 WHERE id = $3 RETURNING *`,
+    `UPDATE users SET full_name = COALESCE($1, full_name), phone = COALESCE($2, phone) WHERE id = $3 RETURNING *`,
     [fullName || null, phone || null, req.params.id]
   );
   if (!result.rows.length) return res.status(404).json({ error: 'Usuario no encontrado.' });
