@@ -937,10 +937,10 @@
             <option value="admin" ${u.role==='admin'?'selected':''}>Administrador</option>
             <option value="super_admin" ${u.role==='super_admin'?'selected':''}>Súper administrador</option>
           </select>
-          <div style="display:flex;flex-wrap:wrap;gap:14px">
-            <a class="es-link" data-saverole="${u.id}" style="font-size:12px">guardar rol</a>
-            <a class="es-link" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}" style="font-size:12px">restablecer contraseña</a>
-            <a class="es-link" data-deluser="${u.id}" style="font-size:12px;color:var(--alert)">eliminar</a>
+          <div style="display:flex;flex-wrap:nowrap;gap:16px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px">
+            <a class="es-link" data-saverole="${u.id}" style="font-size:12px;flex-shrink:0;white-space:nowrap">guardar rol</a>
+            <a class="es-link" data-resetpass="${u.id}|${escapeHtml(u.fullName)}|${escapeHtml(u.email)}" style="font-size:12px;flex-shrink:0;white-space:nowrap">restablecer contraseña</a>
+            <a class="es-link" data-deluser="${u.id}" style="font-size:12px;color:var(--alert);flex-shrink:0;white-space:nowrap">eliminar</a>
           </div>
         </div>`;
       }
