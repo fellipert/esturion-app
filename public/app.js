@@ -116,7 +116,7 @@
       try{ const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members; }catch(e){}
       try{ S.cartera = await api('/payments/cartera'); }catch(e){}
       try{ const m = await api('/messages/sent'); S.sentMessages = m.messages; }catch(e){}
-      if(isSuper()){ try{ const ic = await api('/settings/invite-code'); S.inviteCode = ic.inviteCode; }catch(e){} }
+      try{ const ic = await api('/settings/invite-code'); S.inviteCode = ic.inviteCode; }catch(e){}
     } else {
       try{ const p = await api('/payments/me'); S.myPayment = p; }catch(e){}
       try{ S.myStats = await api('/classes/attendance-stats/me'); }catch(e){}
@@ -639,7 +639,7 @@
   function renderSocios(){
     const users = S.allUsers;
     let html = '';
-    if(isSuper()){
+    if(isAdminOrAbove()){
       html += `<div class="es-card" style="margin-bottom:16px">
         <h2 class="es-h">Código de invitación</h2>
         <p class="es-sub">Los nuevos clientes deben ingresarlo para poder crear su cuenta desde "Crear cuenta".</p>
@@ -649,6 +649,8 @@
         </div>
         <p class="es-hint" style="margin-top:8px">Al generar uno nuevo, el código anterior deja de funcionar de inmediato — compártelo con quien quieras invitar.</p>
       </div>`;
+    }
+    if(isSuper()){
       html += `<div class="es-card" style="margin-bottom:16px">
         <h2 class="es-h">Crear cuenta de administración</h2>
         <p class="es-sub">Da acceso a un nuevo administrador o súper administrador.</p>
