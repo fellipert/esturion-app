@@ -311,7 +311,7 @@
         <label class="es-label">EPS</label>
         <input class="es-input" id="es-p-eps" value="${escapeHtml(cl.eps||'')}" placeholder="Ej. Sura, Nueva EPS..."/>
         <label class="es-label">Contacto personal</label>
-        <input class="es-input" id="es-p-personal-contact" value="${escapeHtml(cl.personalContactPhone||'')}" placeholder="Teléfono de contacto personal"/>
+        <input class="es-input" id="es-p-personal-contact" value="${escapeHtml(cl.personalContactPhone||user.phone||'')}" placeholder="Teléfono de contacto personal"/>
         <label class="es-label">Nombre del contacto de emergencia</label>
         <input class="es-input" id="es-p-ec-name" value="${escapeHtml(cl.emergencyContactName||'')}"/>
         <label class="es-label">Teléfono del contacto de emergencia</label>
