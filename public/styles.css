@@ -105,13 +105,19 @@
   .es-sidebar button.active svg{ stroke:#fff; }
   .es-main{ flex:1; min-width:0; padding:22px 24px 30px 24px; }
   @media (max-width:640px){
-    .es-layout{ flex-direction:column; }
     .es-sidebar{
-      width:100%; flex-direction:row; flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
-      border-right:none; border-bottom:1px solid var(--border); padding:10px 12px; gap:6px;
+      width:92px; flex-shrink:0; padding:12px 6px; gap:3px;
     }
-    .es-sidebar button{ flex-direction:column; gap:4px; padding:8px 12px; font-size:10.5px; white-space:nowrap; flex-shrink:0; }
-    .es-main{ padding:18px 16px 26px 16px; }
+    .es-sidebar button{
+      flex-direction:column; gap:3px; padding:8px 4px; font-size:9.5px; white-space:normal;
+      text-align:center; line-height:1.15;
+    }
+    .es-main{ padding:16px 12px 24px 12px; }
+  }
+
+  @media (max-width:400px){
+    .es-sidebar{ width:78px; }
+    .es-sidebar button{ font-size:8.8px; }
   }
 
   .es-grid{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
