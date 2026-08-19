@@ -22,7 +22,7 @@ router.get('/me', requireAuth, async (req, res) => {
     [req.user.id]
   );
   const historyRes = await pool.query(
-    'SELECT amount, method, months, paid_at, due_date FROM payments WHERE user_id = $1 ORDER BY paid_at DESC',
+    'SELECT amount, method, months, paid_at, due_date, is_schedule_only, note FROM payments WHERE user_id = $1 ORDER BY paid_at DESC, id DESC',
     [req.user.id]
   );
   const dueDate = dueRes.rows[0]?.due_date || null;
@@ -104,6 +104,19 @@ router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, r
     `INSERT INTO payments (user_id, amount, method, months, due_date, registered_by)
      VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
     [userId, amount || null, validMethod, months, dueDateStr, req.user.id]
+  );
+  res.status(201).json({ payment: result.rows[0] });
+});
+
+// Programar (fijar) la próxima fecha de pago de un cliente específico, sin registrar un pago
+// recibido — útil para dar a cada cliente una fecha de corte distinta. Admin y super_admin.
+router.post('/schedule', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const { userId, dueDate, note } = req.body;
+  if (!userId || !dueDate) return res.status(400).json({ error: 'Cliente y fecha son obligatorios.' });
+  const result = await pool.query(
+    `INSERT INTO payments (user_id, amount, method, months, due_date, is_schedule_only, note, registered_by)
+     VALUES ($1, NULL, NULL, 0, $2, true, $3, $4) RETURNING *`,
+    [userId, dueDate, note || null, req.user.id]
   );
   res.status(201).json({ payment: result.rows[0] });
 });

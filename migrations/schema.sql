@@ -112,15 +112,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_unique
   ON attendance(class_id, user_id, COALESCE(beneficiary_id, 0));
 
 CREATE TABLE IF NOT EXISTS payments (
-  id            SERIAL PRIMARY KEY,
-  user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  amount        NUMERIC(10,2),
-  method        VARCHAR(30) DEFAULT 'transferencia' CHECK (method IN ('transferencia','nequi','efectivo','tarjeta','otro')),
-  months        INTEGER NOT NULL DEFAULT 1,
-  paid_at       DATE NOT NULL DEFAULT CURRENT_DATE,
-  due_date      DATE NOT NULL,
-  registered_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  id               SERIAL PRIMARY KEY,
+  user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  amount           NUMERIC(10,2),
+  method           VARCHAR(30) DEFAULT 'transferencia' CHECK (method IN ('transferencia','nequi','efectivo','tarjeta','otro')),
+  months           INTEGER NOT NULL DEFAULT 1,
+  paid_at          DATE NOT NULL DEFAULT CURRENT_DATE,
+  due_date         DATE NOT NULL,
+  is_schedule_only BOOLEAN NOT NULL DEFAULT false,
+  note             TEXT,
+  registered_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Mensajería interna: individual (recipient_user_id), por clase (recipient_class_id),

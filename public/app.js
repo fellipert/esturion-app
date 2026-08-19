@@ -851,6 +851,19 @@
       <button class="es-btn" id="es-pay-register" style="margin-top:14px">Registrar pago</button>
     </div>`;
     html += `<div class="es-card">
+      <h2 class="es-h">Programar próxima fecha de pago</h2>
+      <p class="es-sub">Fija la fecha de vencimiento de un cliente sin registrar un pago recibido — útil para dar a cada uno su propia fecha de corte.</p>
+      <label class="es-label">Cliente</label>
+      <select class="es-input" id="es-sched-user">
+        ${statuses.map(u=>`<option value="${u.id}">${escapeHtml(u.fullName)}</option>`).join('')}
+      </select>
+      <label class="es-label">Próxima fecha de pago</label>
+      <input class="es-input" type="date" id="es-sched-date" value="${todayStr()}"/>
+      <label class="es-label">Nota (opcional)</label>
+      <input class="es-input" id="es-sched-note" placeholder="Ej. Acordado con la cliente"/>
+      <button class="es-btn secondary" id="es-sched-save" style="margin-top:14px">Programar fecha</button>
+    </div>`;
+    html += `<div class="es-card">
       <h2 class="es-h">Estado de mensualidades</h2>
       <p class="es-sub">${statuses.length} cliente(s) registrados.</p>`;
     if(statuses.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
@@ -890,7 +903,11 @@
     else{
       html += `<table class="es-table"><thead><tr><th>Fecha</th><th>Meses</th><th>Método</th><th>Monto</th></tr></thead><tbody>`;
       hist.forEach(h=>{
-        html += `<tr><td>${fmtDate(h.paid_at)}</td><td>${h.months}</td><td>${escapeHtml(h.methodLabel||h.method||'—')}</td><td>${h.amount? escapeHtml(h.amount): '—'}</td></tr>`;
+        if(h.is_schedule_only){
+          html += `<tr><td>${fmtDate(h.paid_at)}</td><td colspan="3"><span class="es-badge warn">📅 Fecha reprogramada a ${fmtDate(h.due_date)}</span>${h.note?` <span class="meta">— ${escapeHtml(h.note)}</span>`:''}</td></tr>`;
+        } else {
+          html += `<tr><td>${fmtDate(h.paid_at)}</td><td>${h.months}</td><td>${escapeHtml(h.methodLabel||h.method||'—')}</td><td>${h.amount? escapeHtml(h.amount): '—'}</td></tr>`;
+        }
       });
       html += `</tbody></table>`;
     }
@@ -1409,6 +1426,20 @@
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         showToast('Pago registrado'); render();
+      }catch(err){ showToast(err.message); }
+    };
+
+    const schedSave = document.getElementById('es-sched-save');
+    if(schedSave) schedSave.onclick = async ()=>{
+      const userId = document.getElementById('es-sched-user').value;
+      const dueDate = document.getElementById('es-sched-date').value;
+      const note = document.getElementById('es-sched-note').value.trim();
+      if(!dueDate){ showToast('Elige una fecha.'); return; }
+      try{
+        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note }) });
+        const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
+        S.cartera = await api('/payments/cartera');
+        showToast('Fecha de pago programada'); render();
       }catch(err){ showToast(err.message); }
     };
 
