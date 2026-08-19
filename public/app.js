@@ -910,6 +910,8 @@
             <div style="font-weight:700;font-size:13px">${escapeHtml(s.fullName)}</div>
             <label class="es-label" style="margin-top:0">Fecha</label>
             <input class="es-input" type="date" id="es-edit-sched-date-${s.id}" value="${s.dueDate}"/>
+            <label class="es-label">Valor programado</label>
+            <input class="es-input" id="es-edit-sched-amount-${s.id}" value="${s.amount||''}" placeholder="Ej. 135000"/>
             <label class="es-label">Nota</label>
             <input class="es-input" id="es-edit-sched-note-${s.id}" value="${escapeHtml(s.note||'')}"/>
             <div style="display:flex;gap:8px">
@@ -920,7 +922,7 @@
         } else {
           html += `<div class="es-list-item">
             <div><div style="font-weight:700;font-size:13px">${escapeHtml(s.fullName)}</div>
-            <div class="meta">Programado para ${fmtDate(s.dueDate)}${s.note?` — ${escapeHtml(s.note)}`:''}</div></div>
+            <div class="meta">Programado para ${fmtDate(s.dueDate)}${s.planName?` · ${escapeHtml(s.planName)}`:''}${s.amount?` · $${Number(s.amount).toLocaleString('es-CO')}`:''}${s.note?` — ${escapeHtml(s.note)}`:''}</div></div>
             <div style="text-align:right;white-space:nowrap">
               <a class="es-link" data-editsched="${s.id}" style="font-size:11.5px">editar</a>
               &nbsp;·&nbsp;
@@ -960,7 +962,7 @@
       html += `<table class="es-table"><thead><tr><th>Fecha</th><th>Meses</th><th>Método</th><th>Monto</th></tr></thead><tbody>`;
       hist.forEach(h=>{
         if(h.is_schedule_only){
-          html += `<tr><td>${fmtDate(h.paid_at)}</td><td colspan="3"><span class="es-badge warn">📅 Fecha reprogramada a ${fmtDate(h.due_date)}</span>${h.note?` <span class="meta">— ${escapeHtml(h.note)}</span>`:''}</td></tr>`;
+          html += `<tr><td>${fmtDate(h.paid_at)}</td><td colspan="3"><span class="es-badge warn">📅 Fecha reprogramada a ${fmtDate(h.due_date)}</span>${h.amount?` <span class="meta">· Valor programado: $${Number(h.amount).toLocaleString('es-CO')}</span>`:''}${h.note?` <span class="meta">— ${escapeHtml(h.note)}</span>`:''}</td></tr>`;
         } else {
           html += `<tr><td>${fmtDate(h.paid_at)}</td><td>${h.months}</td><td>${escapeHtml(h.methodLabel||h.method||'—')}</td><td>${h.amount? escapeHtml(h.amount): '—'}</td></tr>`;
         }
@@ -1648,9 +1650,10 @@
       const note = document.getElementById('es-sched-note').value.trim();
       const planId = document.getElementById('es-sched-planid').value || null;
       const creditsAssigned = document.getElementById('es-sched-credits').value || null;
+      const amount = document.getElementById('es-sched-amount').value.trim() || null;
       if(!dueDate){ showToast('Elige una fecha.'); return; }
       try{
-        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note, planId, creditsAssigned }) });
+        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note, planId, creditsAssigned, amount }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
@@ -1670,6 +1673,7 @@
         try{
           await api('/payments/schedule/'+id, { method:'PUT', body: JSON.stringify({
             dueDate: document.getElementById('es-edit-sched-date-'+id).value,
+            amount: document.getElementById('es-edit-sched-amount-'+id).value.trim() || null,
             note: document.getElementById('es-edit-sched-note-'+id).value.trim(),
           })});
           S.editingScheduleId = null;
