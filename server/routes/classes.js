@@ -155,6 +155,20 @@ router.delete('/:id', requireAuth, requireRole('admin', 'super_admin'), async (r
 
 // Confirmar / retirar mi reserva a una clase, para mí (beneficiaryId ausente) o para un
 // beneficiario específico (beneficiaryId presente). Verifica que el beneficiario sea propio.
+// Créditos: 1 crédito = 1 clase. Solo aplica a role='cliente' — el pool de créditos es
+// compartido entre el titular y sus beneficiarios (una sola cuenta, un solo saldo).
+async function hasAvailableCredits(userId) {
+  const c = await pool.query('SELECT credits_assigned, credits_used FROM clients WHERE user_id = $1', [userId]);
+  if (!c.rows.length) return true;
+  return (c.rows[0].credits_assigned - c.rows[0].credits_used) > 0;
+}
+async function adjustCredits(userId, delta) {
+  await pool.query(
+    'UPDATE clients SET credits_used = GREATEST(0, LEAST(credits_assigned, credits_used + $1)) WHERE user_id = $2',
+    [delta, userId]
+  );
+}
+
 router.post('/:id/confirm', requireAuth, async (req, res) => {
   const classId = req.params.id;
   const beneficiaryId = req.body.beneficiaryId || null;
@@ -174,11 +188,27 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
   let confirmed;
   if (existing.rows.length) {
     confirmed = !existing.rows[0].confirmed;
+    if (req.user.role === 'cliente') {
+      if (confirmed) {
+        if (!(await hasAvailableCredits(req.user.id))) {
+          return res.status(403).json({ error: 'No tienes créditos disponibles para reservar esta clase.' });
+        }
+        await adjustCredits(req.user.id, 1);
+      } else {
+        await adjustCredits(req.user.id, -1);
+      }
+    }
     await pool.query(
       'UPDATE attendance SET confirmed = $1, confirmed_at = now() WHERE id = $2',
       [confirmed, existing.rows[0].id]
     );
   } else {
+    if (req.user.role === 'cliente') {
+      if (!(await hasAvailableCredits(req.user.id))) {
+        return res.status(403).json({ error: 'No tienes créditos disponibles para reservar esta clase.' });
+      }
+      await adjustCredits(req.user.id, 1);
+    }
     confirmed = true;
     await pool.query(
       'INSERT INTO attendance (class_id, user_id, beneficiary_id, confirmed) VALUES ($1,$2,$3,true)',
@@ -195,11 +225,19 @@ router.post('/:id/confirm-all', requireAuth, async (req, res) => {
     'SELECT id FROM beneficiaries WHERE client_user_id = $1', [req.user.id]
   );
   const people = [null, ...beneficiaries.rows.map(b => b.id)];
+  let confirmedCount = 0, skippedForCredits = 0;
   for (const beneficiaryId of people) {
     const existing = await pool.query(
-      'SELECT id FROM attendance WHERE class_id = $1 AND user_id = $2 AND COALESCE(beneficiary_id,0) = COALESCE($3,0)',
+      'SELECT id, confirmed FROM attendance WHERE class_id = $1 AND user_id = $2 AND COALESCE(beneficiary_id,0) = COALESCE($3,0)',
       [classId, req.user.id, beneficiaryId]
     );
+    const alreadyConfirmed = existing.rows.length && existing.rows[0].confirmed;
+    if (alreadyConfirmed) { confirmedCount++; continue; }
+    if (req.user.role === 'cliente' && !(await hasAvailableCredits(req.user.id))) {
+      skippedForCredits++;
+      continue;
+    }
+    if (req.user.role === 'cliente') await adjustCredits(req.user.id, 1);
     if (existing.rows.length) {
       await pool.query('UPDATE attendance SET confirmed = true, confirmed_at = now() WHERE id = $1', [existing.rows[0].id]);
     } else {
@@ -208,8 +246,9 @@ router.post('/:id/confirm-all', requireAuth, async (req, res) => {
         [classId, req.user.id, beneficiaryId]
       );
     }
+    confirmedCount++;
   }
-  res.json({ ok: true, count: people.length });
+  res.json({ ok: true, count: confirmedCount, skippedForCredits });
 });
 
 // Ver el detalle de asistencia (reservas) de una clase — admin y super_admin.

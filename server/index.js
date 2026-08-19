@@ -11,6 +11,7 @@ const settingsRoutes = require('./routes/settings');
 const messageRoutes = require('./routes/messages');
 const beneficiaryRoutes = require('./routes/beneficiaries');
 const scheduleRoutes = require('./routes/schedules');
+const planRoutes = require('./routes/plans');
 const { UPLOAD_DIR } = require('./middleware/upload');
 
 const app = express();
@@ -34,6 +35,7 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/beneficiaries', beneficiaryRoutes);
 app.use('/api/schedules', scheduleRoutes);
+app.use('/api/plans', planRoutes);
 
 // Frontend estático (build de public/)
 app.use(express.static(path.join(__dirname, '..', 'public')));

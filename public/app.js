@@ -42,6 +42,10 @@
     asistenciaDate: null,
     scheduledPayments: [],
     editingScheduleId: null,
+    myCredits: null,
+    plans: [],
+    showNewPlanForm: false,
+    editingPlanId: null,
   };
 
   function isSuper(){ return S.user && S.user.role === 'super_admin'; }
@@ -127,6 +131,7 @@
       S.classes = c.classes;
     }catch(e){ S.classes = []; }
     try{ const s = await api('/schedules'); S.schedules = s.schedules; }catch(e){}
+    try{ const pl = await api('/plans'); S.plans = pl.plans; }catch(e){}
     if(isAdminOrAbove()){
       try{ const u = await api('/users'); S.allUsers = u.users; }catch(e){}
       try{ const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members; }catch(e){}
@@ -138,6 +143,7 @@
       try{ const p = await api('/payments/me'); S.myPayment = p; }catch(e){}
       try{ S.myStats = await api('/classes/attendance-stats/me'); }catch(e){}
       try{ const b = await api('/beneficiaries/me'); S.myBeneficiaries = b.beneficiaries; }catch(e){}
+      try{ S.myCredits = await api('/payments/credits/me'); }catch(e){}
       try{ const pr = await api('/schedules/preference/me'); S.myPreference = pr.preference; }catch(e){}
     }
     try{ const m = await api('/messages/me'); S.myMessages = m.messages; }catch(e){}
@@ -270,15 +276,16 @@
     clases: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>',
     asistencia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.3 2.3L16 9.5"/></svg>',
     pagos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg>',
+    planes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Z"/><path d="M4 10h16M8 14h3"/></svg>',
     socios: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><circle cx="17.5" cy="8.5" r="2.5"/><path d="M15.7 13.8c2.6.5 4.6 2.8 4.6 5.6"/></svg>',
     mensajes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z"/></svg>',
   };
 
   function navTabs(){
     return isSuper()
-      ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Clientes'],['mensajes','Mensajes']]
+      ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['planes','Planes y créditos'],['socios','Clientes'],['mensajes','Mensajes']]
       : isAdminOrAbove()
-        ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['socios','Clientes'],['mensajes','Mensajes']]
+        ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['planes','Planes y créditos'],['socios','Clientes'],['mensajes','Mensajes']]
         : [['perfil','Mi perfil'],['clases','Clases'],['pagos','Mi mensualidad'],['mensajes','Mensajes']];
   }
 
@@ -297,6 +304,7 @@
     else if(S.tab === 'clases') html += renderClasesCalendar();
     else if(S.tab === 'asistencia' && isAdminOrAbove()) html += renderAsistenciaAdmin();
     else if(S.tab === 'pagos') html += isAdminOrAbove() ? renderPagosAdmin() : renderPagosCliente();
+    else if(S.tab === 'planes' && isAdminOrAbove()) html += renderPlanesAdmin();
     else if(S.tab === 'socios' && isAdminOrAbove()) html += renderSocios();
     else if(S.tab === 'mensajes') html += renderMensajes();
     return html;
@@ -851,6 +859,11 @@
       </select>
       <label class="es-label">Monto (opcional)</label>
       <input class="es-input" id="es-pay-amount" placeholder="Ej. 180000"/>
+      <button class="es-btn secondary" type="button" id="es-pay-suggest" style="margin-top:8px;font-size:12px">Sugerir plan según el valor</button>
+      <div id="es-pay-suggestion" class="meta" style="margin-top:6px;min-height:16px"></div>
+      <input type="hidden" id="es-pay-planid" value=""/>
+      <label class="es-label">Créditos a asignar</label>
+      <input class="es-input" type="number" min="0" id="es-pay-credits" placeholder="Se completa al sugerir el plan, o escribe manualmente"/>
       <button class="es-btn" id="es-pay-register" style="margin-top:14px">Registrar pago</button>
     </div>`;
     html += `<div class="es-card">
@@ -953,6 +966,57 @@
       html += `</tbody></table>`;
     }
     html += `</div>`;
+
+    const cr = S.myCredits;
+    if(cr){
+      const user = S.user;
+      html += `<div class="es-card" style="margin-top:16px">
+        <h2 class="es-h">Mi plan y créditos</h2>
+        <div class="es-grid" style="gap:10px 20px;margin-top:8px">
+          <div>
+            <div class="meta">Valor de mensualidad</div>
+            <div style="font-weight:700;font-size:14px">$${Number((user.client&&user.client.monthlyFee)||0).toLocaleString('es-CO')}</div>
+          </div>
+          <div>
+            <div class="meta">Plan asignado</div>
+            <div style="font-weight:700;font-size:14px">${escapeHtml(cr.planName||'Sin plan asignado')}</div>
+          </div>
+          <div>
+            <div class="meta">Créditos asignados</div>
+            <div style="font-weight:700;font-size:14px">${cr.creditsAssigned}</div>
+          </div>
+          <div>
+            <div class="meta">Créditos utilizados</div>
+            <div style="font-weight:700;font-size:14px">${cr.creditsUsed}</div>
+          </div>
+          <div>
+            <div class="meta">Créditos disponibles</div>
+            <div style="font-weight:700;font-size:16px;color:${cr.creditsAvailable>0?'var(--success)':'var(--alert)'}">${cr.creditsAvailable}</div>
+          </div>
+          <div>
+            <div class="meta">Próxima fecha de pago</div>
+            <div style="font-weight:700;font-size:14px">${fmtDate(st.dueDate)}</div>
+          </div>
+          <div>
+            <div class="meta">Inicio del ciclo</div>
+            <div style="font-weight:700;font-size:14px">${fmtDate(cr.cycleStart)}</div>
+          </div>
+          <div>
+            <div class="meta">Vencimiento del ciclo</div>
+            <div style="font-weight:700;font-size:14px">${fmtDate(cr.cycleEnd)}</div>
+          </div>
+        </div>
+        <h2 class="es-h" style="margin-top:18px">Historial de clases consumidas</h2>`;
+      if(!cr.history || cr.history.length===0){ html += renderEmpty('Todavía no has consumido créditos en clases.'); }
+      else{
+        html += `<table class="es-table"><thead><tr><th>Fecha</th><th>Clase</th><th>Para</th></tr></thead><tbody>`;
+        cr.history.forEach(h=>{
+          html += `<tr><td>${fmtDate(h.date)}</td><td>${escapeHtml(h.title)} · ${h.time.slice(0,5)}</td><td>${h.beneficiaryName?escapeHtml(h.beneficiaryName):'Tú'}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+      }
+      html += `</div>`;
+    }
     return html;
   }
 
@@ -1059,6 +1123,74 @@
       </div>
       <div style="margin-top:8px"><b>Enfermedad o lesión física:</b> ${escapeHtml(cl.medicalCondition||'Ninguna registrada')}</div>
     </div>`;
+  }
+
+  function renderPlanesAdmin(){
+    const plans = S.plans || [];
+    const byTariff = {};
+    plans.forEach(p=>{ (byTariff[p.tariffLabel] = byTariff[p.tariffLabel] || []).push(p); });
+    let html = `<div class="es-card" style="margin-bottom:16px">
+      <h2 class="es-h">Configuración de planes y créditos</h2>
+      <p class="es-sub">1 crédito = 1 clase. El plan se sugiere automáticamente según el valor pagado; los créditos se descuentan al confirmar asistencia y se devuelven si el cliente cancela.</p>
+      <button class="es-btn secondary" id="es-toggle-newplan" style="margin-top:8px">${S.showNewPlanForm?'Cancelar':'+ Crear nuevo plan'}</button>`;
+    if(S.showNewPlanForm){
+      html += `<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+        <label class="es-label">Nombre del plan</label>
+        <input class="es-input" id="es-np-name" placeholder="Ej. PLAN 4"/>
+        <label class="es-label">Tarifa (grupo/año)</label>
+        <input class="es-input" id="es-np-tariff" placeholder="Ej. Tarifas 2026" value="Tarifas 2026"/>
+        <label class="es-label">Valor mínimo (COP)</label>
+        <input class="es-input" type="number" id="es-np-min" placeholder="Ej. 90000"/>
+        <label class="es-label">Valor máximo (COP) — vacío = sin límite</label>
+        <input class="es-input" type="number" id="es-np-max" placeholder="Ej. 120999"/>
+        <label class="es-label">Créditos</label>
+        <input class="es-input" type="number" id="es-np-credits" placeholder="Ej. 4"/>
+        <label class="es-label">Vigente desde</label>
+        <input class="es-input" type="date" id="es-np-effective" value="${todayStr()}"/>
+        <button class="es-btn" id="es-np-create" style="margin-top:12px">Guardar plan</button>
+      </div>`;
+    }
+    html += `</div>`;
+
+    Object.keys(byTariff).forEach(tariff=>{
+      html += `<div class="es-card" style="margin-bottom:16px">
+        <h2 class="es-h" style="font-size:14px">${escapeHtml(tariff)}</h2>
+        <table class="es-table" style="margin-top:8px"><thead><tr><th>Plan</th><th>Rango</th><th>Créditos</th><th>Estado</th><th>Última modificación</th><th></th></tr></thead><tbody>`;
+      byTariff[tariff].forEach(p=>{
+        if(S.editingPlanId === p.id){
+          html += `<tr><td colspan="6" style="padding:10px 8px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <input class="es-input" id="es-ep-name-${p.id}" value="${escapeHtml(p.name)}"/>
+              <div style="display:flex;gap:8px">
+                <input class="es-input" type="number" id="es-ep-min-${p.id}" value="${p.minValue}" placeholder="Mínimo"/>
+                <input class="es-input" type="number" id="es-ep-max-${p.id}" value="${p.maxValue!=null?p.maxValue:''}" placeholder="Máximo (vacío=sin límite)"/>
+              </div>
+              <input class="es-input" type="number" id="es-ep-credits-${p.id}" value="${p.credits}" placeholder="Créditos"/>
+              <div style="display:flex;gap:8px">
+                <button class="es-btn" data-saveplan="${p.id}">Guardar</button>
+                <button class="es-btn secondary" data-canceleditplan="1">Cancelar</button>
+              </div>
+            </div>
+          </td></tr>`;
+        } else {
+          html += `<tr>
+            <td>${escapeHtml(p.name)}</td>
+            <td class="meta">$${p.minValue.toLocaleString('es-CO')} ${p.maxValue!=null? '– $'+p.maxValue.toLocaleString('es-CO') : 'en adelante'}</td>
+            <td>${p.credits}</td>
+            <td><span class="es-badge ${p.active?'ok':'bad'}">${p.active?'Activo':'Inactivo'}</span></td>
+            <td class="meta">${fmtDate(p.updatedAt ? p.updatedAt.slice(0,10) : null)}${p.updatedByName?' · '+escapeHtml(p.updatedByName):''}</td>
+            <td style="white-space:nowrap">
+              <a class="es-link" data-editplan="${p.id}" style="font-size:11px">editar</a>
+              &nbsp;·&nbsp;
+              <a class="es-link" data-toggleplan="${p.id}" style="font-size:11px">${p.active?'desactivar':'activar'}</a>
+            </td>
+          </tr>`;
+        }
+      });
+      html += `</tbody></table></div>`;
+    });
+    if(plans.length===0) html += renderEmpty('No hay planes configurados todavía.');
+    return html;
   }
 
   function renderMensajes(){
@@ -1456,14 +1588,36 @@
       };
     });
 
+    const paySuggest = document.getElementById('es-pay-suggest');
+    if(paySuggest) paySuggest.onclick = async ()=>{
+      const amount = document.getElementById('es-pay-amount').value.trim();
+      if(!amount){ showToast('Escribe el valor pagado primero.'); return; }
+      const box = document.getElementById('es-pay-suggestion');
+      const creditsInput = document.getElementById('es-pay-credits');
+      const planIdInput = document.getElementById('es-pay-planid');
+      try{
+        const r = await api('/plans/suggest?value='+encodeURIComponent(amount));
+        if(r.plan){
+          box.innerHTML = `Plan sugerido: <b>${escapeHtml(r.plan.name)}</b> — ${r.plan.credits} créditos`;
+          creditsInput.value = r.plan.credits;
+          planIdInput.value = r.plan.id;
+        } else {
+          box.innerHTML = `<span style="color:var(--alert)">${escapeHtml(r.message)}</span>`;
+          planIdInput.value = '';
+        }
+      }catch(err){ showToast(err.message); }
+    };
+
     const payRegister = document.getElementById('es-pay-register');
     if(payRegister) payRegister.onclick = async ()=>{
       const userId = document.getElementById('es-pay-user').value;
       const months = document.getElementById('es-pay-months').value;
       const method = document.getElementById('es-pay-method').value;
       const amount = document.getElementById('es-pay-amount').value.trim();
+      const planId = document.getElementById('es-pay-planid').value || null;
+      const creditsAssigned = document.getElementById('es-pay-credits').value || null;
       try{
-        await api('/payments', { method:'POST', body: JSON.stringify({ userId, months, method, amount: amount || null }) });
+        await api('/payments', { method:'POST', body: JSON.stringify({ userId, months, method, amount: amount || null, planId, creditsAssigned }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         showToast('Pago registrado'); render();
@@ -1516,6 +1670,59 @@
           const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
           S.cartera = await api('/payments/cartera');
           showToast('Programación eliminada'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+
+    const toggleNewPlan = document.getElementById('es-toggle-newplan');
+    if(toggleNewPlan) toggleNewPlan.onclick = ()=>{ S.showNewPlanForm = !S.showNewPlanForm; render(); };
+
+    const npCreate = document.getElementById('es-np-create');
+    if(npCreate) npCreate.onclick = async ()=>{
+      try{
+        const maxVal = document.getElementById('es-np-max').value.trim();
+        await api('/plans', { method:'POST', body: JSON.stringify({
+          name: document.getElementById('es-np-name').value.trim(),
+          tariffLabel: document.getElementById('es-np-tariff').value.trim(),
+          minValue: Number(document.getElementById('es-np-min').value),
+          maxValue: maxVal ? Number(maxVal) : null,
+          credits: Number(document.getElementById('es-np-credits').value),
+          effectiveFrom: document.getElementById('es-np-effective').value,
+        })});
+        const pl = await api('/plans'); S.plans = pl.plans;
+        S.showNewPlanForm = false;
+        showToast('Plan creado'); render();
+      }catch(err){ showToast(err.message); }
+    };
+    document.querySelectorAll('[data-editplan]').forEach(el=>{
+      el.onclick = ()=>{ S.editingPlanId = Number(el.getAttribute('data-editplan')); render(); };
+    });
+    document.querySelectorAll('[data-canceleditplan]').forEach(el=>{
+      el.onclick = ()=>{ S.editingPlanId = null; render(); };
+    });
+    document.querySelectorAll('[data-saveplan]').forEach(el=>{
+      el.onclick = async ()=>{
+        const id = el.getAttribute('data-saveplan');
+        try{
+          const maxVal = document.getElementById('es-ep-max-'+id).value.trim();
+          await api('/plans/'+id, { method:'PUT', body: JSON.stringify({
+            name: document.getElementById('es-ep-name-'+id).value.trim(),
+            minValue: Number(document.getElementById('es-ep-min-'+id).value),
+            maxValue: maxVal ? Number(maxVal) : null,
+            credits: Number(document.getElementById('es-ep-credits-'+id).value),
+          })});
+          S.editingPlanId = null;
+          const pl = await api('/plans'); S.plans = pl.plans;
+          showToast('Plan actualizado'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+    document.querySelectorAll('[data-toggleplan]').forEach(el=>{
+      el.onclick = async ()=>{
+        try{
+          await api('/plans/'+el.getAttribute('data-toggleplan')+'/toggle', { method:'PUT' });
+          const pl = await api('/plans'); S.plans = pl.plans;
+          showToast('Plan actualizado'); render();
         }catch(err){ showToast(err.message); }
       };
     });

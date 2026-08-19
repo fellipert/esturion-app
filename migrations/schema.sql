@@ -23,6 +23,23 @@ CREATE TABLE IF NOT EXISTS users (
 );
 
 -- Perfil extendido, solo para usuarios con role = 'cliente'
+-- Planes de créditos de clases, versionados por "tarifa" (ej. "Tarifas 2026") para poder
+-- cambiar valores cada año sin perder el historial de tarifas anteriores.
+CREATE TABLE IF NOT EXISTS credit_plans (
+  id             SERIAL PRIMARY KEY,
+  name           VARCHAR(60) NOT NULL,
+  tariff_label   VARCHAR(60) NOT NULL DEFAULT 'Tarifas 2026',
+  min_value      NUMERIC(10,2) NOT NULL,
+  max_value      NUMERIC(10,2), -- NULL = sin límite
+  credits        INTEGER NOT NULL,
+  active         BOOLEAN NOT NULL DEFAULT true,
+  effective_from DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  updated_by     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS clients (
   user_id                        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   birth_date                     DATE,
@@ -36,6 +53,11 @@ CREATE TABLE IF NOT EXISTS clients (
   notes                          TEXT,
   active                         BOOLEAN NOT NULL DEFAULT true,
   has_beneficiaries              BOOLEAN NOT NULL DEFAULT false,
+  current_plan_id                INTEGER REFERENCES credit_plans(id) ON DELETE SET NULL,
+  credits_assigned               INTEGER NOT NULL DEFAULT 0,
+  credits_used                   INTEGER NOT NULL DEFAULT 0,
+  cycle_start                    DATE,
+  cycle_end                      DATE,
   created_at                     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -121,6 +143,8 @@ CREATE TABLE IF NOT EXISTS payments (
   due_date         DATE NOT NULL,
   is_schedule_only BOOLEAN NOT NULL DEFAULT false,
   note             TEXT,
+  plan_id          INTEGER REFERENCES credit_plans(id) ON DELETE SET NULL,
+  credits_assigned INTEGER,
   registered_by    INTEGER REFERENCES users(id) ON DELETE SET NULL,
   created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -173,3 +197,12 @@ INSERT INTO class_schedules (day_of_week, start_time, title, schedule_type, recu
   (6, '15:00', 'Clase de natación', 'opcional', true, false, 'Sábado 3:00 p.m. — horario opcional'),
   (0, '09:00', 'Clase de natación', 'opcional', true, false, 'Domingo — horario configurable por administración')
 ON CONFLICT DO NOTHING;
+
+-- Planes de créditos iniciales (Tarifas 2026)
+INSERT INTO credit_plans (name, tariff_label, min_value, max_value, credits, active)
+SELECT * FROM (VALUES
+  ('PLAN 4', 'Tarifas 2026', 90000::numeric, 120999::numeric, 4, true),
+  ('PLAN 8', 'Tarifas 2026', 121000::numeric, 149999::numeric, 8, true),
+  ('PLAN 16', 'Tarifas 2026', 150000::numeric, NULL::numeric, 16, true)
+) AS v(name, tariff_label, min_value, max_value, credits, active)
+WHERE NOT EXISTS (SELECT 1 FROM credit_plans);

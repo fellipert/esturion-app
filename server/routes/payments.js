@@ -84,9 +84,10 @@ router.get('/cartera', requireAuth, requireRole('admin', 'super_admin'), async (
   });
 });
 
-// Registrar un pago — admin y super_admin (tarea operativa, no estructural)
+// Registrar un pago — admin y super_admin (tarea operativa, no estructural).
+// Asigna plan y créditos, e inicia un nuevo ciclo de créditos para el cliente.
 router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
-  const { userId, months, amount, method } = req.body;
+  const { userId, months, amount, method, planId, creditsAssigned } = req.body;
   if (!userId || !months) return res.status(400).json({ error: 'Cliente y meses son obligatorios.' });
   const validMethod = ['transferencia', 'nequi', 'efectivo', 'tarjeta', 'otro'].includes(method) ? method : 'transferencia';
 
@@ -101,12 +102,23 @@ router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, r
   const dueDateStr = dueDate.toISOString().slice(0, 10);
 
   const result = await pool.query(
-    `INSERT INTO payments (user_id, amount, method, months, due_date, registered_by)
-     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-    [userId, amount || null, validMethod, months, dueDateStr, req.user.id]
+    `INSERT INTO payments (user_id, amount, method, months, due_date, plan_id, credits_assigned, registered_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [userId, amount || null, validMethod, months, dueDateStr, planId || null, creditsAssigned || null, req.user.id]
   );
+
+  // Inicia un nuevo ciclo de créditos para el cliente (si se asignaron créditos con este pago)
+  if (creditsAssigned) {
+    await pool.query(
+      `UPDATE clients SET current_plan_id = $1, credits_assigned = $2, credits_used = 0,
+       cycle_start = CURRENT_DATE, cycle_end = $3 WHERE user_id = $4`,
+      [planId || null, creditsAssigned, dueDateStr, userId]
+    );
+  }
+
   res.status(201).json({ payment: result.rows[0] });
 });
+
 
 // Programar (fijar) la próxima fecha de pago de un cliente específico, sin registrar un pago
 // recibido — útil para dar a cada cliente una fecha de corte distinta. Admin y super_admin.
@@ -153,6 +165,38 @@ router.put('/schedule/:id', requireAuth, requireRole('admin', 'super_admin'), as
 router.delete('/schedule/:id', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   await pool.query(`DELETE FROM payments WHERE id = $1 AND is_schedule_only = true`, [req.params.id]);
   res.json({ ok: true });
+});
+
+// Mis créditos, plan y ciclo actual (cliente), con historial de clases consumidas
+router.get('/credits/me', requireAuth, async (req, res) => {
+  const clientRes = await pool.query(
+    `SELECT c.*, p.name AS plan_name, p.credits AS plan_credits
+     FROM clients c LEFT JOIN credit_plans p ON p.id = c.current_plan_id
+     WHERE c.user_id = $1`,
+    [req.user.id]
+  );
+  const cl = clientRes.rows[0];
+  const historyRes = await pool.query(
+    `SELECT cls.title, cls.class_date, cls.class_time, a.confirmed_at, b.full_name AS beneficiary_name
+     FROM attendance a
+     JOIN classes cls ON cls.id = a.class_id
+     LEFT JOIN beneficiaries b ON b.id = a.beneficiary_id
+     WHERE a.user_id = $1 AND a.confirmed = true
+     ORDER BY cls.class_date DESC, cls.class_time DESC LIMIT 30`,
+    [req.user.id]
+  );
+  res.json({
+    planName: cl?.plan_name || null,
+    creditsAssigned: cl?.credits_assigned || 0,
+    creditsUsed: cl?.credits_used || 0,
+    creditsAvailable: Math.max(0, (cl?.credits_assigned || 0) - (cl?.credits_used || 0)),
+    cycleStart: cl?.cycle_start || null,
+    cycleEnd: cl?.cycle_end || null,
+    history: historyRes.rows.map(h => ({
+      title: h.title, date: h.class_date, time: h.class_time,
+      consumedAt: h.confirmed_at, beneficiaryName: h.beneficiary_name || null,
+    })),
+  });
 });
 
 module.exports = router;
