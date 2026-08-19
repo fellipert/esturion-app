@@ -1161,10 +1161,10 @@
     Object.keys(byTariff).forEach(tariff=>{
       html += `<div class="es-card" style="margin-bottom:16px">
         <h2 class="es-h" style="font-size:14px">${escapeHtml(tariff)}</h2>
-        <table class="es-table" style="margin-top:8px"><thead><tr><th>Plan</th><th>Rango</th><th>Créditos</th><th>Estado</th><th>Última modificación</th><th></th></tr></thead><tbody>`;
+        <table class="es-table" style="margin-top:8px"><thead><tr><th>Plan</th><th>Rango</th><th>Créditos</th><th>Estado</th><th></th></tr></thead><tbody>`;
       byTariff[tariff].forEach(p=>{
         if(S.editingPlanId === p.id){
-          html += `<tr><td colspan="6" style="padding:10px 8px">
+          html += `<tr><td colspan="5" style="padding:10px 8px">
             <div style="display:flex;flex-direction:column;gap:8px">
               <input class="es-input" id="es-ep-name-${p.id}" value="${escapeHtml(p.name)}"/>
               <div style="display:flex;gap:8px">
@@ -1184,7 +1184,6 @@
             <td class="meta">$${p.minValue.toLocaleString('es-CO')} ${p.maxValue!=null? '– $'+p.maxValue.toLocaleString('es-CO') : 'en adelante'}</td>
             <td>${p.credits}</td>
             <td><span class="es-badge ${p.active?'ok':'bad'}">${p.active?'Activo':'Inactivo'}</span></td>
-            <td class="meta">${fmtDate(p.updatedAt ? p.updatedAt.slice(0,10) : null)}${p.updatedByName?' · '+escapeHtml(p.updatedByName):''}</td>
             <td style="white-space:nowrap">
               <a class="es-link" data-editplan="${p.id}" style="font-size:11px">editar</a>
               &nbsp;·&nbsp;
