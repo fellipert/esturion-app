@@ -168,6 +168,18 @@ async function adjustCredits(userId, delta) {
     [delta, userId]
   );
 }
+// La mensualidad vencida bloquea nuevas reservas, aunque todavía tenga créditos sin usar
+// de un ciclo anterior.
+async function isPaymentOverdue(userId) {
+  const result = await pool.query(
+    'SELECT due_date FROM payments WHERE user_id = $1 ORDER BY due_date DESC LIMIT 1',
+    [userId]
+  );
+  if (!result.rows.length) return false; // sin ningún pago registrado aún: no se bloquea aquí
+  const dueDate = result.rows[0].due_date;
+  const today = new Date().toISOString().slice(0, 10);
+  return new Date(dueDate) < new Date(today);
+}
 
 router.post('/:id/confirm', requireAuth, async (req, res) => {
   const classId = req.params.id;
@@ -190,6 +202,9 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
     confirmed = !existing.rows[0].confirmed;
     if (req.user.role === 'cliente') {
       if (confirmed) {
+        if (await isPaymentOverdue(req.user.id)) {
+          return res.status(403).json({ error: 'Tu mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
+        }
         if (!(await hasAvailableCredits(req.user.id))) {
           return res.status(403).json({ error: 'No tienes créditos disponibles para reservar esta clase.' });
         }
@@ -204,6 +219,9 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
     );
   } else {
     if (req.user.role === 'cliente') {
+      if (await isPaymentOverdue(req.user.id)) {
+        return res.status(403).json({ error: 'Tu mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
+      }
       if (!(await hasAvailableCredits(req.user.id))) {
         return res.status(403).json({ error: 'No tienes créditos disponibles para reservar esta clase.' });
       }
@@ -221,6 +239,9 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
 // Confirmar de una vez para el titular y todos sus beneficiarios
 router.post('/:id/confirm-all', requireAuth, async (req, res) => {
   const classId = req.params.id;
+  if (req.user.role === 'cliente' && await isPaymentOverdue(req.user.id)) {
+    return res.status(403).json({ error: 'Tu mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
+  }
   const beneficiaries = await pool.query(
     'SELECT id FROM beneficiaries WHERE client_user_id = $1', [req.user.id]
   );
