@@ -9,7 +9,7 @@ function statusFromDueDate(dueDate) {
   const today = new Date().toISOString().slice(0, 10);
   const diffDays = Math.round((new Date(dueDate) - new Date(today)) / 86400000);
   if (diffDays < 0) return { label: 'Vencida', status: 'bad', dueDate, diffDays };
-  if (diffDays <= 5) return { label: 'Por vencer', status: 'warn', dueDate, diffDays };
+  if (diffDays <= 2) return { label: 'Por vencer', status: 'warn', dueDate, diffDays };
   return { label: 'Al día', status: 'ok', dueDate, diffDays };
 }
 
