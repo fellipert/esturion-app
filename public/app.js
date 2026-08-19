@@ -40,6 +40,8 @@
     showPrefPicker: false,
     showNewScheduleForm: false,
     asistenciaDate: null,
+    scheduledPayments: [],
+    editingScheduleId: null,
   };
 
   function isSuper(){ return S.user && S.user.role === 'super_admin'; }
@@ -129,6 +131,7 @@
       try{ const u = await api('/users'); S.allUsers = u.users; }catch(e){}
       try{ const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members; }catch(e){}
       try{ S.cartera = await api('/payments/cartera'); }catch(e){}
+      try{ const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled; }catch(e){}
       try{ const m = await api('/messages/sent'); S.sentMessages = m.messages; }catch(e){}
       try{ const ic = await api('/settings/invite-code'); S.inviteCode = ic.inviteCode; }catch(e){}
     } else {
@@ -863,6 +866,7 @@
       <input class="es-input" id="es-sched-note" placeholder="Ej. Acordado con la cliente"/>
       <button class="es-btn secondary" id="es-sched-save" style="margin-top:14px">Programar fecha</button>
     </div>`;
+    html += renderScheduledPaymentsCard();
     html += `<div class="es-card">
       <h2 class="es-h">Estado de mensualidades</h2>
       <p class="es-sub">${statuses.length} cliente(s) registrados.</p>`;
@@ -875,6 +879,43 @@
       html += `</tbody></table>`;
     }
     html += `</div></div>`;
+    return html;
+  }
+
+  function renderScheduledPaymentsCard(){
+    const list = S.scheduledPayments || [];
+    let html = `<div class="es-card" style="margin-bottom:16px">
+      <h2 class="es-h">Programaciones de pago</h2>
+      <p class="es-sub">Clientes a quienes se les fijó una fecha de pago sin registrar un pago recibido.</p>`;
+    if(list.length===0){ html += renderEmpty('No hay programaciones activas.'); }
+    else{
+      list.forEach(s=>{
+        if(S.editingScheduleId === s.id){
+          html += `<div class="es-list-item" style="flex-direction:column;align-items:stretch;gap:8px">
+            <div style="font-weight:700;font-size:13px">${escapeHtml(s.fullName)}</div>
+            <label class="es-label" style="margin-top:0">Fecha</label>
+            <input class="es-input" type="date" id="es-edit-sched-date-${s.id}" value="${s.dueDate}"/>
+            <label class="es-label">Nota</label>
+            <input class="es-input" id="es-edit-sched-note-${s.id}" value="${escapeHtml(s.note||'')}"/>
+            <div style="display:flex;gap:8px">
+              <button class="es-btn" data-savesched="${s.id}">Guardar</button>
+              <button class="es-btn secondary" data-cancelsched="1">Cancelar</button>
+            </div>
+          </div>`;
+        } else {
+          html += `<div class="es-list-item">
+            <div><div style="font-weight:700;font-size:13px">${escapeHtml(s.fullName)}</div>
+            <div class="meta">Programado para ${fmtDate(s.dueDate)}${s.note?` — ${escapeHtml(s.note)}`:''}</div></div>
+            <div style="text-align:right;white-space:nowrap">
+              <a class="es-link" data-editsched="${s.id}" style="font-size:11.5px">editar</a>
+              &nbsp;·&nbsp;
+              <a class="es-link" data-delsched="${s.id}" style="font-size:11.5px;color:var(--alert)">eliminar</a>
+            </div>
+          </div>`;
+        }
+      });
+    }
+    html += `</div>`;
     return html;
   }
 
@@ -1439,9 +1480,45 @@
         await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
+        const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
         showToast('Fecha de pago programada'); render();
       }catch(err){ showToast(err.message); }
     };
+
+    document.querySelectorAll('[data-editsched]').forEach(el=>{
+      el.onclick = ()=>{ S.editingScheduleId = Number(el.getAttribute('data-editsched')); render(); };
+    });
+    document.querySelectorAll('[data-cancelsched]').forEach(el=>{
+      el.onclick = ()=>{ S.editingScheduleId = null; render(); };
+    });
+    document.querySelectorAll('[data-savesched]').forEach(el=>{
+      el.onclick = async ()=>{
+        const id = el.getAttribute('data-savesched');
+        try{
+          await api('/payments/schedule/'+id, { method:'PUT', body: JSON.stringify({
+            dueDate: document.getElementById('es-edit-sched-date-'+id).value,
+            note: document.getElementById('es-edit-sched-note-'+id).value.trim(),
+          })});
+          S.editingScheduleId = null;
+          const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
+          const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
+          S.cartera = await api('/payments/cartera');
+          showToast('Programación actualizada'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+    document.querySelectorAll('[data-delsched]').forEach(el=>{
+      el.onclick = async ()=>{
+        if(!confirm('¿Eliminar esta programación de pago?')) return;
+        try{
+          await api('/payments/schedule/'+el.getAttribute('data-delsched'), { method:'DELETE' });
+          const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
+          const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
+          S.cartera = await api('/payments/cartera');
+          showToast('Programación eliminada'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
 
     const toggleMorosos = document.getElementById('es-toggle-morosos');
     if(toggleMorosos) toggleMorosos.onclick = ()=>{ S.showMorosos = !S.showMorosos; render(); };

@@ -121,4 +121,38 @@ router.post('/schedule', requireAuth, requireRole('admin', 'super_admin'), async
   res.status(201).json({ payment: result.rows[0] });
 });
 
+// Listado de programaciones de fecha de pago (registros solo de programación, sin pago
+// recibido) — admin y super_admin, para ver a quién se le programó qué fecha.
+router.get('/scheduled', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const result = await pool.query(`
+    SELECT p.id, p.user_id, u.full_name, p.due_date, p.note, p.paid_at, p.created_at
+    FROM payments p JOIN users u ON u.id = p.user_id
+    WHERE p.is_schedule_only = true
+    ORDER BY p.created_at DESC
+  `);
+  res.json({
+    scheduled: result.rows.map(r => ({
+      id: r.id, userId: r.user_id, fullName: r.full_name, dueDate: r.due_date, note: r.note, createdAt: r.created_at,
+    })),
+  });
+});
+
+// Editar una programación existente — admin y super_admin
+router.put('/schedule/:id', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const { dueDate, note } = req.body;
+  const result = await pool.query(
+    `UPDATE payments SET due_date = COALESCE($1, due_date), note = $2
+     WHERE id = $3 AND is_schedule_only = true RETURNING *`,
+    [dueDate || null, note || null, req.params.id]
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'Programación no encontrada.' });
+  res.json({ payment: result.rows[0] });
+});
+
+// Eliminar una programación — admin y super_admin
+router.delete('/schedule/:id', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  await pool.query(`DELETE FROM payments WHERE id = $1 AND is_schedule_only = true`, [req.params.id]);
+  res.json({ ok: true });
+});
+
 module.exports = router;
