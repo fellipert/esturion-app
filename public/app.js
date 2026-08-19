@@ -299,10 +299,36 @@
     return html;
   }
 
+  function renderPaymentAlertBanner(){
+    const user = S.user;
+    if(user.role === 'cliente'){
+      const st = S.myPayment ? S.myPayment.status : null;
+      if(!st) return '';
+      if(st.status === 'bad'){
+        return `<div class="es-alertbar">⚠ Tu mensualidad está <b>vencida</b> desde el ${fmtDate(st.dueDate)}. Contacta a la administración para regularizar tu pago.
+          <a class="es-link" data-goto-tab="pagos" style="margin-left:8px;font-size:12px">Ver detalle</a></div>`;
+      }
+      if(st.status === 'warn' && st.dueDate){
+        return `<div class="es-alertbar">⏳ Tu mensualidad vence pronto: <b>${fmtDate(st.dueDate)}</b>.
+          <a class="es-link" data-goto-tab="pagos" style="margin-left:8px;font-size:12px">Ver detalle</a></div>`;
+      }
+      return '';
+    }
+    if(isAdminOrAbove()){
+      const alerts = S.paymentAlerts || [];
+      if(alerts.length===0) return '';
+      const carteraTotal = S.cartera ? Number(S.cartera.carteraTotal||0) : null;
+      return `<div class="es-alertbar">⚠ <b>${alerts.length} cliente(s)</b> con mensualidad vencida o por vencer${carteraTotal!=null?` · Cartera pendiente: <b>$${carteraTotal.toLocaleString('es-CO')}</b>`:''}.
+        <a class="es-link" data-goto-tab="pagos" style="margin-left:8px;font-size:12px">Ver pagos y alertas</a></div>`;
+    }
+    return '';
+  }
+
   function renderPerfil(){
     const user = S.user;
     const avatar = user.photoUrl || svgAvatarPlaceholder();
-    let html = `
+    let html = renderPaymentAlertBanner();
+    html += `
     <div class="es-card" style="max-width:480px">
       <div class="es-profile-head">
         <img class="es-avatar" src="${avatar}"/>
@@ -1100,6 +1126,9 @@
         if(S.tab==='asistencia') loadAllAttendance();
         if(S.tab==='clases' && !S.weekData) loadWeekData(S.weekOffset);
       };
+    });
+    document.querySelectorAll('[data-goto-tab]').forEach(el=>{
+      el.onclick = ()=>{ S.tab = el.getAttribute('data-goto-tab'); render(); };
     });
 
     const loginBtn = document.getElementById('es-login-btn');
