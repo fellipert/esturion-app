@@ -887,9 +887,9 @@
       <p class="es-sub">${statuses.length} cliente(s) registrados.</p>`;
     if(statuses.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
     else{
-      html += `<table class="es-table"><thead><tr><th>Cliente</th><th>Vence</th><th>Estado</th></tr></thead><tbody>`;
+      html += `<table class="es-table"><thead><tr><th>Cliente</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>`;
       statuses.forEach(s=>{
-        html += `<tr><td>${escapeHtml(s.fullName)}</td><td class="meta">${fmtDate(s.dueDate)}</td><td><span class="es-badge ${paymentBadgeClass(s.status)}">${s.label}</span></td></tr>`;
+        html += `<tr><td>${escapeHtml(s.fullName)}</td><td class="meta">${fmtDate(s.dueDate)}</td><td><span class="es-badge ${paymentBadgeClass(s.status)}">${s.label}</span></td><td><a class="es-link" data-resetpayments="${s.id}|${escapeHtml(s.fullName)}" style="font-size:11px;color:var(--alert)">eliminar</a></td></tr>`;
       });
       html += `</tbody></table>`;
     }
@@ -1742,6 +1742,20 @@
           await api('/plans/'+el.getAttribute('data-toggleplan')+'/toggle', { method:'PUT' });
           const pl = await api('/plans'); S.plans = pl.plans;
           showToast('Plan actualizado'); render();
+        }catch(err){ showToast(err.message); }
+      };
+    });
+
+    document.querySelectorAll('[data-resetpayments]').forEach(el=>{
+      el.onclick = async ()=>{
+        const [userId, fullName] = el.getAttribute('data-resetpayments').split('|');
+        if(!confirm(`¿Eliminar todo el registro de pagos de ${fullName}? Se reinicia su plan y créditos. Su cuenta NO se elimina.`)) return;
+        try{
+          await api('/payments/reset/'+userId, { method:'DELETE' });
+          const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
+          S.cartera = await api('/payments/cartera');
+          const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
+          showToast('Registro de pagos eliminado'); render();
         }catch(err){ showToast(err.message); }
       };
     });

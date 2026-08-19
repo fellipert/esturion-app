@@ -207,4 +207,17 @@ router.get('/credits/me', requireAuth, async (req, res) => {
   });
 });
 
+// Eliminar/reiniciar todo el registro de pagos de un cliente (borra su historial de pagos
+// y programaciones, y reinicia su plan/créditos) — la cuenta del cliente NO se toca.
+// Admin y super_admin.
+router.delete('/reset/:userId', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  await pool.query('DELETE FROM payments WHERE user_id = $1', [req.params.userId]);
+  await pool.query(
+    `UPDATE clients SET current_plan_id = NULL, credits_assigned = 0, credits_used = 0,
+     cycle_start = NULL, cycle_end = NULL WHERE user_id = $1`,
+    [req.params.userId]
+  );
+  res.json({ ok: true });
+});
+
 module.exports = router;
