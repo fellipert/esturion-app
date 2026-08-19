@@ -859,11 +859,6 @@
       </select>
       <label class="es-label">Monto (opcional)</label>
       <input class="es-input" id="es-pay-amount" placeholder="Ej. 180000"/>
-      <button class="es-btn secondary" type="button" id="es-pay-suggest" style="margin-top:8px;font-size:12px">Sugerir plan según el valor</button>
-      <div id="es-pay-suggestion" class="meta" style="margin-top:6px;min-height:16px"></div>
-      <input type="hidden" id="es-pay-planid" value=""/>
-      <label class="es-label">Créditos a asignar</label>
-      <input class="es-input" type="number" min="0" id="es-pay-credits" placeholder="Se completa al sugerir el plan, o escribe manualmente"/>
       <button class="es-btn" id="es-pay-register" style="margin-top:14px">Registrar pago</button>
     </div>`;
     html += `<div class="es-card">
@@ -1595,36 +1590,14 @@
       };
     });
 
-    const paySuggest = document.getElementById('es-pay-suggest');
-    if(paySuggest) paySuggest.onclick = async ()=>{
-      const amount = document.getElementById('es-pay-amount').value.trim();
-      if(!amount){ showToast('Escribe el valor pagado primero.'); return; }
-      const box = document.getElementById('es-pay-suggestion');
-      const creditsInput = document.getElementById('es-pay-credits');
-      const planIdInput = document.getElementById('es-pay-planid');
-      try{
-        const r = await api('/plans/suggest?value='+encodeURIComponent(amount));
-        if(r.plan){
-          box.innerHTML = `Plan sugerido: <b>${escapeHtml(r.plan.name)}</b> — ${r.plan.credits} créditos`;
-          creditsInput.value = r.plan.credits;
-          planIdInput.value = r.plan.id;
-        } else {
-          box.innerHTML = `<span style="color:var(--alert)">${escapeHtml(r.message)}</span>`;
-          planIdInput.value = '';
-        }
-      }catch(err){ showToast(err.message); }
-    };
-
     const payRegister = document.getElementById('es-pay-register');
     if(payRegister) payRegister.onclick = async ()=>{
       const userId = document.getElementById('es-pay-user').value;
       const months = document.getElementById('es-pay-months').value;
       const method = document.getElementById('es-pay-method').value;
       const amount = document.getElementById('es-pay-amount').value.trim();
-      const planId = document.getElementById('es-pay-planid').value || null;
-      const creditsAssigned = document.getElementById('es-pay-credits').value || null;
       try{
-        await api('/payments', { method:'POST', body: JSON.stringify({ userId, months, method, amount: amount || null, planId, creditsAssigned }) });
+        await api('/payments', { method:'POST', body: JSON.stringify({ userId, months, method, amount: amount || null }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         showToast('Pago registrado'); render();
