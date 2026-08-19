@@ -838,11 +838,13 @@
     html += `<div class="es-grid">`;
     html += `<div class="es-card">
       <h2 class="es-h">Registrar pago</h2>
-      <p class="es-sub">Extiende la vigencia de la mensualidad de un cliente.</p>
+      <p class="es-sub">Modalidad mes adelantado: la próxima fecha de pago cae el mismo día del mes que registres aquí.</p>
       <label class="es-label">Cliente</label>
       <select class="es-input" id="es-pay-user">
         ${statuses.map(u=>`<option value="${u.id}">${escapeHtml(u.fullName)}</option>`).join('')}
       </select>
+      <label class="es-label">Fecha de pago</label>
+      <input class="es-input" type="date" id="es-pay-date" value="${todayStr()}"/>
       <label class="es-label">Meses pagados</label>
       <select class="es-input" id="es-pay-months">
         <option value="1">1 mes</option>
@@ -1595,11 +1597,12 @@
     const payRegister = document.getElementById('es-pay-register');
     if(payRegister) payRegister.onclick = async ()=>{
       const userId = document.getElementById('es-pay-user').value;
+      const paidAt = document.getElementById('es-pay-date').value;
       const months = document.getElementById('es-pay-months').value;
       const method = document.getElementById('es-pay-method').value;
       const amount = document.getElementById('es-pay-amount').value.trim();
       try{
-        await api('/payments', { method:'POST', body: JSON.stringify({ userId, months, method, amount: amount || null }) });
+        await api('/payments', { method:'POST', body: JSON.stringify({ userId, paidAt, months, method, amount: amount || null }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         showToast('Pago registrado'); render();

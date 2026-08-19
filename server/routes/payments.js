@@ -87,34 +87,46 @@ router.get('/cartera', requireAuth, requireRole('admin', 'super_admin'), async (
 // Registrar un pago — admin y super_admin (tarea operativa, no estructural).
 // Asigna plan y créditos, e inicia un nuevo ciclo de créditos para el cliente.
 router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
-  const { userId, months, amount, method, planId, creditsAssigned } = req.body;
+  const { userId, months, amount, method, planId, creditsAssigned, paidAt } = req.body;
   if (!userId || !months) return res.status(400).json({ error: 'Cliente y meses son obligatorios.' });
   const validMethod = ['transferencia', 'nequi', 'efectivo', 'tarjeta', 'otro'].includes(method) ? method : 'transferencia';
 
-  const lastDue = await pool.query(
-    'SELECT due_date FROM payments WHERE user_id = $1 ORDER BY due_date DESC LIMIT 1',
-    [userId]
-  );
-  const today = new Date().toISOString().slice(0, 10);
-  const base = lastDue.rows[0] && lastDue.rows[0].due_date >= today ? lastDue.rows[0].due_date : today;
-  const dueDate = new Date(base);
-  dueDate.setDate(dueDate.getDate() + 30 * Number(months));
-  const dueDateStr = dueDate.toISOString().slice(0, 10);
+  // Fecha de pago: la que registre el admin (por defecto, hoy). Modalidad "mes adelantado":
+  // la próxima fecha de pago cae el mismo día del mes que este pago, N meses adelante —
+  // no un conteo fijo de 30 días (evita que la fecha se vaya corriendo con el tiempo).
+  const paidDateStr = paidAt || new Date().toISOString().slice(0, 10);
+  const dueDateObj = new Date(paidDateStr + 'T00:00:00');
+  dueDateObj.setMonth(dueDateObj.getMonth() + Number(months));
+  const dueDateStr = dueDateObj.toISOString().slice(0, 10);
+
+  // El ciclo empieza el día del pago y vence un día antes de la próxima fecha de pago.
+  const cycleEndObj = new Date(dueDateObj);
+  cycleEndObj.setDate(cycleEndObj.getDate() - 1);
+  const cycleEndStr = cycleEndObj.toISOString().slice(0, 10);
 
   const result = await pool.query(
-    `INSERT INTO payments (user_id, amount, method, months, due_date, plan_id, credits_assigned, registered_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [userId, amount || null, validMethod, months, dueDateStr, planId || null, creditsAssigned || null, req.user.id]
+    `INSERT INTO payments (user_id, amount, method, months, paid_at, due_date, plan_id, credits_assigned, registered_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [userId, amount || null, validMethod, months, paidDateStr, dueDateStr, planId || null, creditsAssigned || null, req.user.id]
   );
 
-  // Inicia un nuevo ciclo de créditos para el cliente (si se asignaron créditos con este pago)
-  if (creditsAssigned) {
-    await pool.query(
-      `UPDATE clients SET current_plan_id = $1, credits_assigned = $2, credits_used = 0,
-       cycle_start = CURRENT_DATE, cycle_end = $3 WHERE user_id = $4`,
-      [planId || null, creditsAssigned, dueDateStr, userId]
-    );
+  // Actualiza el ciclo del cliente. Como es pago mes adelantado, el valor de la mensualidad
+  // que ve el cliente pasa a ser el valor realmente pagado en este registro.
+  const fields = ['cycle_start = $1', 'cycle_end = $2'];
+  const params = [paidDateStr, cycleEndStr];
+  if (amount) {
+    fields.push(`monthly_fee = $${params.length + 1}`);
+    params.push(amount);
   }
+  if (creditsAssigned) {
+    fields.push(`current_plan_id = $${params.length + 1}`);
+    params.push(planId || null);
+    fields.push(`credits_assigned = $${params.length + 1}`);
+    params.push(creditsAssigned);
+    fields.push('credits_used = 0');
+  }
+  params.push(userId);
+  await pool.query(`UPDATE clients SET ${fields.join(', ')} WHERE user_id = $${params.length}`, params);
 
   res.status(201).json({ payment: result.rows[0] });
 });
