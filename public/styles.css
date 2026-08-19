@@ -178,6 +178,14 @@ html, body{
   max-width:780px; margin:24px auto; min-height:calc(100vh - 48px);
   border-radius:18px; overflow:hidden; border:1px solid var(--border); background:var(--bg);
 }
+@media (min-width:1000px){
+  #esturion-root{ max-width:1180px; }
+  .es-sidebar{ width:230px; }
+  .es-main{ padding:28px 34px 36px 34px; }
+}
+@media (min-width:1400px){
+  #esturion-root{ max-width:1360px; }
+}
 @media (max-width:820px){ #esturion-root{ margin:0; border-radius:0; min-height:100vh; } }
 
 /* --- ajustes móviles adicionales (todos los módulos) --- */
