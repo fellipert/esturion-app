@@ -1605,6 +1605,23 @@
     };
 
     const schedSuggest = document.getElementById('es-sched-suggest');
+    const schedCreditsInput = document.getElementById('es-sched-credits');
+    if(schedCreditsInput) schedCreditsInput.onchange = ()=>{
+      const creditsVal = Number(schedCreditsInput.value);
+      const amountInput = document.getElementById('es-sched-amount');
+      const box = document.getElementById('es-sched-suggestion');
+      const planIdInput = document.getElementById('es-sched-planid');
+      if(!creditsVal){ return; }
+      const matches = (S.plans||[]).filter(p=>p.active && p.credits===creditsVal);
+      const match = matches.sort((a,b)=> (b.updatedAt||'').localeCompare(a.updatedAt||''))[0];
+      if(match){
+        amountInput.value = match.minValue;
+        box.innerHTML = `Valor sugerido para <b>${escapeHtml(match.name)}</b>: $${match.minValue.toLocaleString('es-CO')} — puedes modificarlo si quieres`;
+        planIdInput.value = match.id;
+      } else {
+        box.innerHTML = `<span style="color:var(--warn)">No hay ningún plan con exactamente ${creditsVal} créditos.</span>`;
+      }
+    };
     if(schedSuggest) schedSuggest.onclick = async ()=>{
       const amount = document.getElementById('es-sched-amount').value.trim();
       if(!amount){ showToast('Escribe el valor pagado primero.'); return; }
