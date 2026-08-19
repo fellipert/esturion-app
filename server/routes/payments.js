@@ -121,15 +121,23 @@ router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, r
 
 
 // Programar (fijar) la próxima fecha de pago de un cliente específico, sin registrar un pago
-// recibido — útil para dar a cada cliente una fecha de corte distinta. Admin y super_admin.
+// recibido — útil para dar a cada cliente una fecha de corte distinta. Opcionalmente también
+// asigna plan y créditos (inicia un nuevo ciclo), igual que un pago normal. Admin y super_admin.
 router.post('/schedule', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
-  const { userId, dueDate, note } = req.body;
+  const { userId, dueDate, note, planId, creditsAssigned } = req.body;
   if (!userId || !dueDate) return res.status(400).json({ error: 'Cliente y fecha son obligatorios.' });
   const result = await pool.query(
-    `INSERT INTO payments (user_id, amount, method, months, due_date, is_schedule_only, note, registered_by)
-     VALUES ($1, NULL, NULL, 0, $2, true, $3, $4) RETURNING *`,
-    [userId, dueDate, note || null, req.user.id]
+    `INSERT INTO payments (user_id, amount, method, months, due_date, is_schedule_only, note, plan_id, credits_assigned, registered_by)
+     VALUES ($1, NULL, NULL, 0, $2, true, $3, $4, $5, $6) RETURNING *`,
+    [userId, dueDate, note || null, planId || null, creditsAssigned || null, req.user.id]
   );
+  if (creditsAssigned) {
+    await pool.query(
+      `UPDATE clients SET current_plan_id = $1, credits_assigned = $2, credits_used = 0,
+       cycle_start = CURRENT_DATE, cycle_end = $3 WHERE user_id = $4`,
+      [planId || null, creditsAssigned, dueDate, userId]
+    );
+  }
   res.status(201).json({ payment: result.rows[0] });
 });
 

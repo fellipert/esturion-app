@@ -877,6 +877,13 @@
       <input class="es-input" type="date" id="es-sched-date" value="${todayStr()}"/>
       <label class="es-label">Nota (opcional)</label>
       <input class="es-input" id="es-sched-note" placeholder="Ej. Acordado con la cliente"/>
+      <label class="es-label">Valor pagado (opcional, para sugerir plan)</label>
+      <input class="es-input" id="es-sched-amount" placeholder="Ej. 135000"/>
+      <button class="es-btn secondary" type="button" id="es-sched-suggest" style="margin-top:8px;font-size:12px">Sugerir plan según el valor</button>
+      <div id="es-sched-suggestion" class="meta" style="margin-top:6px;min-height:16px"></div>
+      <input type="hidden" id="es-sched-planid" value=""/>
+      <label class="es-label">Créditos a asignar (opcional)</label>
+      <input class="es-input" type="number" min="0" id="es-sched-credits" placeholder="Se completa al sugerir el plan, o escribe manualmente"/>
       <button class="es-btn secondary" id="es-sched-save" style="margin-top:14px">Programar fecha</button>
     </div>`;
     html += renderScheduledPaymentsCard();
@@ -1624,14 +1631,36 @@
       }catch(err){ showToast(err.message); }
     };
 
+    const schedSuggest = document.getElementById('es-sched-suggest');
+    if(schedSuggest) schedSuggest.onclick = async ()=>{
+      const amount = document.getElementById('es-sched-amount').value.trim();
+      if(!amount){ showToast('Escribe el valor pagado primero.'); return; }
+      const box = document.getElementById('es-sched-suggestion');
+      const creditsInput = document.getElementById('es-sched-credits');
+      const planIdInput = document.getElementById('es-sched-planid');
+      try{
+        const r = await api('/plans/suggest?value='+encodeURIComponent(amount));
+        if(r.plan){
+          box.innerHTML = `Plan sugerido: <b>${escapeHtml(r.plan.name)}</b> — ${r.plan.credits} créditos`;
+          creditsInput.value = r.plan.credits;
+          planIdInput.value = r.plan.id;
+        } else {
+          box.innerHTML = `<span style="color:var(--alert)">${escapeHtml(r.message)}</span>`;
+          planIdInput.value = '';
+        }
+      }catch(err){ showToast(err.message); }
+    };
+
     const schedSave = document.getElementById('es-sched-save');
     if(schedSave) schedSave.onclick = async ()=>{
       const userId = document.getElementById('es-sched-user').value;
       const dueDate = document.getElementById('es-sched-date').value;
       const note = document.getElementById('es-sched-note').value.trim();
+      const planId = document.getElementById('es-sched-planid').value || null;
+      const creditsAssigned = document.getElementById('es-sched-credits').value || null;
       if(!dueDate){ showToast('Elige una fecha.'); return; }
       try{
-        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note }) });
+        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note, planId, creditsAssigned }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
