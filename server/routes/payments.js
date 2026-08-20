@@ -18,7 +18,7 @@ const METHOD_LABEL = { transferencia: 'Transferencia', nequi: 'Nequi', efectivo:
 // Mi estado de mensualidad + historial (cualquier rol autenticado ve lo suyo)
 router.get('/me', requireAuth, async (req, res) => {
   const dueRes = await pool.query(
-    'SELECT due_date FROM payments WHERE user_id = $1 ORDER BY due_date DESC LIMIT 1',
+    'SELECT due_date FROM payments WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
     [req.user.id]
   );
   const historyRes = await pool.query(
@@ -36,7 +36,7 @@ router.get('/me', requireAuth, async (req, res) => {
 router.get('/', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   const result = await pool.query(`
     SELECT u.id, u.full_name, u.email, COALESCE(c.monthly_fee, 180000) AS monthly_fee,
-      (SELECT due_date FROM payments p WHERE p.user_id = u.id ORDER BY due_date DESC LIMIT 1) AS due_date
+      (SELECT due_date FROM payments p WHERE p.user_id = u.id ORDER BY created_at DESC LIMIT 1) AS due_date
     FROM users u LEFT JOIN clients c ON c.user_id = u.id
     WHERE u.role = 'cliente' ORDER BY u.full_name ASC
   `);
@@ -55,7 +55,7 @@ router.get('/', requireAuth, requireRole('admin', 'super_admin'), async (req, re
 router.get('/cartera', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   const result = await pool.query(`
     SELECT u.id, u.full_name, COALESCE(c.monthly_fee, 180000) AS monthly_fee, COALESCE(c.active, true) AS active,
-      (SELECT due_date FROM payments p WHERE p.user_id = u.id ORDER BY due_date DESC LIMIT 1) AS due_date
+      (SELECT due_date FROM payments p WHERE p.user_id = u.id ORDER BY created_at DESC LIMIT 1) AS due_date
     FROM users u LEFT JOIN clients c ON c.user_id = u.id
     WHERE u.role = 'cliente'
   `);

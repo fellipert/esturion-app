@@ -172,7 +172,7 @@ async function adjustCredits(userId, delta) {
 // de un ciclo anterior.
 async function isPaymentOverdue(userId) {
   const result = await pool.query(
-    'SELECT due_date FROM payments WHERE user_id = $1 ORDER BY due_date DESC LIMIT 1',
+    'SELECT due_date FROM payments WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
     [userId]
   );
   if (!result.rows.length) return false; // sin ningún pago registrado aún: no se bloquea aquí
