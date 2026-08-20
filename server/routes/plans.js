@@ -93,4 +93,20 @@ router.put('/:id/toggle', requireAuth, requireRole('admin', 'super_admin'), asyn
   res.json({ plan: publicPlan(result.rows[0]) });
 });
 
+// Asignar un plan y sus créditos directamente a un cliente — admin y super_admin.
+// Independiente de las fechas de pago (eso se maneja en "Pagos y alertas").
+router.post('/assign', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const { userId, planId, creditsAssigned } = req.body;
+  if (!userId || !planId || !creditsAssigned) {
+    return res.status(400).json({ error: 'Cliente, plan y créditos son obligatorios.' });
+  }
+  const result = await pool.query(
+    `UPDATE clients SET current_plan_id = $1, credits_assigned = $2, credits_used = 0
+     WHERE user_id = $3 RETURNING *`,
+    [planId, creditsAssigned, userId]
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  res.json({ ok: true });
+});
+
 module.exports = router;
