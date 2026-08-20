@@ -36,7 +36,8 @@ router.get('/me', requireAuth, async (req, res) => {
 router.get('/', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   const result = await pool.query(`
     SELECT u.id, u.full_name, u.email, COALESCE(c.monthly_fee, 180000) AS monthly_fee,
-      (SELECT due_date FROM payments p WHERE p.user_id = u.id ORDER BY created_at DESC LIMIT 1) AS due_date
+      (SELECT due_date FROM payments p WHERE p.user_id = u.id ORDER BY created_at DESC LIMIT 1) AS due_date,
+      (SELECT paid_at FROM payments p WHERE p.user_id = u.id ORDER BY created_at DESC LIMIT 1) AS paid_at
     FROM users u LEFT JOIN clients c ON c.user_id = u.id
     WHERE u.role = 'cliente' ORDER BY u.full_name ASC
   `);
@@ -45,6 +46,7 @@ router.get('/', requireAuth, requireRole('admin', 'super_admin'), async (req, re
     fullName: r.full_name,
     email: r.email,
     monthlyFee: Number(r.monthly_fee),
+    currentPaymentDate: r.paid_at || null,
     ...statusFromDueDate(r.due_date),
   }));
   const alerts = members.filter(m => m.status !== 'ok');

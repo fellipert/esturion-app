@@ -865,9 +865,9 @@
       <p class="es-sub">${statuses.length} cliente(s) registrados.</p>`;
     if(statuses.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
     else{
-      html += `<table class="es-table"><thead><tr><th>Cliente</th><th>Vence</th><th>Estado</th><th></th></tr></thead><tbody>`;
+      html += `<table class="es-table" style="font-size:11.5px"><thead><tr><th>Cliente</th><th>Fecha de pago actual</th><th>Vencimiento</th><th>Estado</th><th></th></tr></thead><tbody>`;
       statuses.forEach(s=>{
-        html += `<tr><td>${escapeHtml(s.fullName)}</td><td class="meta">${fmtDate(s.dueDate)}</td><td><span class="es-badge ${paymentBadgeClass(s.status)}">${s.label}</span></td><td><a class="es-link" data-resetpayments="${s.id}|${escapeHtml(s.fullName)}" style="font-size:11px;color:var(--alert)">eliminar</a></td></tr>`;
+        html += `<tr><td>${escapeHtml(s.fullName)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.currentPaymentDate)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.dueDate)}</td><td><span class="es-badge ${paymentBadgeClass(s.status)}">${s.label}</span></td><td><a class="es-link" data-resetpayments="${s.id}|${escapeHtml(s.fullName)}" style="font-size:11px;color:var(--alert);white-space:nowrap">eliminar</a></td></tr>`;
       });
       html += `</tbody></table>`;
     }
