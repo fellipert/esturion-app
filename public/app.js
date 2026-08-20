@@ -1123,7 +1123,13 @@
     } else {
       html += `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
         <p class="meta" style="margin-bottom:8px">${selected? `Estado actual: <span class="es-badge ${paymentBadgeClass(selected.status)}">${selected.label}</span> · vence ${fmtDate(selected.dueDate)}` : ''}</p>
-        <label class="es-label" style="margin-top:0">Valor a pagar (mensualidad)</label>
+        <label class="es-label" style="margin-top:0">Rango de pago</label>
+        <select class="es-input" id="es-conf-range">
+          <option value="">Elegir un rango...</option>
+          <option value="90000-120000">Rango 1: $90.000 a $120.000</option>
+          <option value="120001-170000">Rango 2: $120.001 a $170.000</option>
+        </select>
+        <label class="es-label">Valor a pagar (mensualidad)</label>
         <input class="es-input" id="es-conf-amount" placeholder="Ej. 135000"/>
         <label class="es-label">Créditos asignados</label>
         <input class="es-input" type="number" min="1" id="es-conf-credits" placeholder="Ej. 8"/>
@@ -1606,6 +1612,14 @@
     if(confClientSelect) confClientSelect.onchange = ()=>{
       S.confClientId = Number(confClientSelect.value);
       render();
+    };
+    const confRange = document.getElementById('es-conf-range');
+    if(confRange) confRange.onchange = ()=>{
+      if(!confRange.value) return;
+      const [min, max] = confRange.value.split('-').map(Number);
+      const amountInput = document.getElementById('es-conf-amount');
+      amountInput.value = min;
+      amountInput.placeholder = `Entre $${min.toLocaleString('es-CO')} y $${max.toLocaleString('es-CO')}`;
     };
     const confSave = document.getElementById('es-conf-save');
     if(confSave) confSave.onclick = async ()=>{
