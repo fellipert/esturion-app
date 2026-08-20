@@ -42,6 +42,9 @@
     asistenciaDate: null,
     scheduledPayments: [],
     editingScheduleId: null,
+    mensualidadFilterMonth: '',
+    historyClientId: null,
+    clientHistory: null,
     myCredits: null,
     confClientId: null,
   };
@@ -862,11 +865,43 @@
     </div>`;
     html += `<div class="es-card">
       <h2 class="es-h">Estado de mensualidades</h2>
-      <p class="es-sub">${statuses.length} cliente(s) registrados.</p>`;
-    if(statuses.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
+      <p class="es-sub">${statuses.length} cliente(s) registrados.</p>
+      <div class="es-grid" style="margin-top:10px">
+        <div>
+          <label class="es-label" style="margin-top:0">Filtrar por mes</label>
+          <input class="es-input" type="month" id="es-mes-filter" value="${S.mensualidadFilterMonth}"/>
+          <p class="es-hint">Muestra quién pagó ese mes, más quien esté vencido o por vencer (sin importar el mes).</p>
+        </div>
+        <div>
+          <label class="es-label" style="margin-top:0">Ver historial de un cliente</label>
+          <select class="es-input" id="es-hist-client">
+            <option value="">Selecciona un cliente...</option>
+            ${statuses.map(s=>`<option value="${s.id}" ${S.historyClientId===s.id?'selected':''}>${escapeHtml(s.fullName)}</option>`).join('')}
+          </select>
+          <button class="es-btn secondary" id="es-hist-view" style="margin-top:8px;font-size:12px">Ver historial mes a mes</button>
+        </div>
+      </div>`;
+    if(S.clientHistory){
+      html += `<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+        <h2 class="es-h" style="font-size:14px">Historial de ${escapeHtml(S.clientHistory.fullName)}</h2>`;
+      if(S.clientHistory.history.length===0){ html += renderEmpty('Este cliente todavía no tiene pagos registrados.'); }
+      else{
+        html += `<table class="es-table" style="font-size:11.5px"><thead><tr><th>Fecha de pago</th><th>Vencimiento</th><th>Valor</th><th>Método</th></tr></thead><tbody>`;
+        S.clientHistory.history.forEach(h=>{
+          html += `<tr><td style="white-space:nowrap">${fmtDate(h.paid_at)}</td><td style="white-space:nowrap">${fmtDate(h.due_date)}</td><td>${h.amount?'$'+h.amount.toLocaleString('es-CO'):'—'}</td><td>${h.is_schedule_only?'📅 Programación':escapeHtml(h.methodLabel||'—')}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+      }
+      html += `</div>`;
+    }
+    const filterMonth = S.mensualidadFilterMonth;
+    const filteredStatuses = filterMonth
+      ? statuses.filter(s => s.status !== 'ok' || (s.currentPaymentDate && s.currentPaymentDate.slice(0,7) === filterMonth))
+      : statuses;
+    if(filteredStatuses.length===0){ html += renderEmpty(filterMonth ? 'Nadie pagó ese mes ni está vencido o por vencer.' : 'Aún no hay clientes registrados.'); }
     else{
-      html += `<table class="es-table" style="font-size:11.5px"><thead><tr><th>Cliente</th><th>Fecha de pago actual</th><th>Vencimiento</th><th>Estado</th><th></th></tr></thead><tbody>`;
-      statuses.forEach(s=>{
+      html += `<table class="es-table" style="font-size:11.5px;margin-top:14px"><thead><tr><th>Cliente</th><th>Fecha de pago actual</th><th>Vencimiento</th><th>Estado</th><th></th></tr></thead><tbody>`;
+      filteredStatuses.forEach(s=>{
         html += `<tr><td>${escapeHtml(s.fullName)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.currentPaymentDate)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.dueDate)}</td><td><span class="es-badge ${paymentBadgeClass(s.status)}">${s.label}</span></td><td><a class="es-link" data-resetpayments="${s.id}|${escapeHtml(s.fullName)}" style="font-size:11px;color:var(--alert);white-space:nowrap">eliminar</a></td></tr>`;
       });
       html += `</tbody></table>`;
@@ -1651,6 +1686,20 @@
         }catch(err){ showToast(err.message); }
       };
     });
+
+    const mesFilter = document.getElementById('es-mes-filter');
+    if(mesFilter) mesFilter.onchange = ()=>{ S.mensualidadFilterMonth = mesFilter.value; render(); };
+
+    const histView = document.getElementById('es-hist-view');
+    if(histView) histView.onclick = async ()=>{
+      const clientId = document.getElementById('es-hist-client').value;
+      if(!clientId){ showToast('Elige un cliente primero.'); return; }
+      try{
+        S.historyClientId = Number(clientId);
+        S.clientHistory = await api('/payments/history/'+clientId);
+        render();
+      }catch(err){ showToast(err.message); }
+    };
 
     const toggleMorosos = document.getElementById('es-toggle-morosos');
     if(toggleMorosos) toggleMorosos.onclick = ()=>{ S.showMorosos = !S.showMorosos; render(); };

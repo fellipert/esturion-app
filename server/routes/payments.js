@@ -252,4 +252,24 @@ router.delete('/reset/:userId', requireAuth, requireRole('admin', 'super_admin')
   res.json({ ok: true });
 });
 
+// Historial completo de pagos de un cliente específico — admin y super_admin,
+// para verificar mes a mes su estado (usado en los filtros de "Pagos y alertas").
+router.get('/history/:userId', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const userRes = await pool.query('SELECT full_name FROM users WHERE id = $1', [req.params.userId]);
+  if (!userRes.rows.length) return res.status(404).json({ error: 'Cliente no encontrado.' });
+  const historyRes = await pool.query(
+    `SELECT paid_at, due_date, amount, method, months, is_schedule_only, note
+     FROM payments WHERE user_id = $1 ORDER BY paid_at DESC, id DESC`,
+    [req.params.userId]
+  );
+  res.json({
+    fullName: userRes.rows[0].full_name,
+    history: historyRes.rows.map(h => ({
+      ...h,
+      amount: h.amount != null ? Number(h.amount) : null,
+      methodLabel: METHOD_LABEL[h.method] || h.method || null,
+    })),
+  });
+});
+
 module.exports = router;
