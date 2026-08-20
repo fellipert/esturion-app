@@ -151,9 +151,10 @@
   .es-empty{ text-align:center; padding:26px 10px; color:#7c95a0; font-size:13px; }
   .es-empty svg{ opacity:0.5; margin-bottom:6px; }
 
-  table.es-table{ width:100%; border-collapse:collapse; font-size:12.5px; }
-  table.es-table th{ text-align:left; padding:8px 8px; color:#5b7480; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; border-bottom:1px solid var(--border); }
-  table.es-table td{ padding:9px 8px; border-bottom:1px solid var(--border); }
+  table.es-table{ display:block; width:100%; max-width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; border-collapse:collapse; font-size:12.5px; }
+  table.es-table thead, table.es-table tbody{ display:table; width:100%; min-width:100%; }
+  table.es-table th{ text-align:left; padding:8px 8px; color:#5b7480; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  table.es-table td{ padding:9px 8px; border-bottom:1px solid var(--border); white-space:nowrap; }
   table.es-table tr:last-child td{ border-bottom:none; }
 
   .es-alertbar{
@@ -197,10 +198,6 @@ html, body{
   /* Botones e inputs con área táctil suficiente */
   .es-btn{ min-height:40px; padding-top:10px; padding-bottom:10px; }
   input.es-input, select.es-input, textarea.es-input{ min-height:40px; font-size:14px; }
-
-  /* Tablas: scroll horizontal en vez de desbordar la pantalla */
-  table.es-table{ display:block; width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch; white-space:nowrap; }
-  table.es-table thead, table.es-table tbody{ display:table; width:100%; }
 
   /* Encabezado: que el correo/nombre largo no rompa el layout */
   .es-topbar{ padding:12px 14px 22px 14px; }
