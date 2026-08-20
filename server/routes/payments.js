@@ -143,13 +143,28 @@ router.post('/schedule', requireAuth, requireRole('admin', 'super_admin'), async
      VALUES ($1, $2, NULL, 0, $3, true, $4, $5, $6, $7) RETURNING *`,
     [userId, amount || null, dueDate, note || null, planId || null, creditsAssigned || null, req.user.id]
   );
-  if (creditsAssigned) {
-    await pool.query(
-      `UPDATE clients SET current_plan_id = $1, credits_assigned = $2, credits_used = 0,
-       cycle_start = CURRENT_DATE, cycle_end = $3 WHERE user_id = $4`,
-      [planId || null, creditsAssigned, dueDate, userId]
-    );
+
+  // El ciclo vence un día antes de la próxima fecha de pago (mismo criterio que un pago normal).
+  const cycleEndObj = new Date(dueDate + 'T00:00:00');
+  cycleEndObj.setDate(cycleEndObj.getDate() - 1);
+  const cycleEndStr = cycleEndObj.toISOString().slice(0, 10);
+
+  const fields = ['cycle_start = CURRENT_DATE', 'cycle_end = $1'];
+  const params = [cycleEndStr];
+  if (amount) {
+    fields.push(`monthly_fee = $${params.length + 1}`);
+    params.push(amount);
   }
+  if (creditsAssigned) {
+    fields.push(`current_plan_id = $${params.length + 1}`);
+    params.push(planId || null);
+    fields.push(`credits_assigned = $${params.length + 1}`);
+    params.push(creditsAssigned);
+    fields.push('credits_used = 0');
+  }
+  params.push(userId);
+  await pool.query(`UPDATE clients SET ${fields.join(', ')} WHERE user_id = $${params.length}`, params);
+
   res.status(201).json({ payment: result.rows[0] });
 });
 

@@ -1155,20 +1155,24 @@
 
     const clientOptions = (S.paymentStatuses||[]);
     html += `<div class="es-card" style="margin-bottom:16px">
-      <h2 class="es-h">Asignar plan a un cliente</h2>
-      <p class="es-sub">Define qué plan y cuántos créditos tiene cada cliente ahora mismo. Las fechas de pago se manejan aparte, en "Pagos y alertas".</p>
+      <h2 class="es-h">Programar plan y fecha de pago</h2>
+      <p class="es-sub">Al programar el plan de un cliente, también fijas su próxima fecha de pago — esto alimenta directamente las alertas y el estado de mensualidades en "Pagos y alertas".</p>
       <label class="es-label">Cliente</label>
       <select class="es-input" id="es-assign-user">
         ${clientOptions.map(u=>`<option value="${u.id}">${escapeHtml(u.fullName)}</option>`).join('')}
       </select>
-      <label class="es-label">Valor de referencia (opcional, para sugerir plan)</label>
+      <label class="es-label">Valor pagado / de referencia</label>
       <input class="es-input" id="es-assign-amount" placeholder="Ej. 135000"/>
       <button class="es-btn secondary" type="button" id="es-assign-suggest" style="margin-top:8px;font-size:12px">Sugerir plan según el valor</button>
       <div id="es-assign-suggestion" class="meta" style="margin-top:6px;min-height:16px"></div>
       <input type="hidden" id="es-assign-planid" value=""/>
       <label class="es-label">Créditos a asignar</label>
       <input class="es-input" type="number" min="1" id="es-assign-credits" placeholder="Ej. 8"/>
-      <button class="es-btn" id="es-assign-save" style="margin-top:14px">Asignar plan</button>
+      <label class="es-label">Próxima fecha de pago</label>
+      <input class="es-input" type="date" id="es-assign-date" value="${todayStr()}"/>
+      <label class="es-label">Nota (opcional)</label>
+      <input class="es-input" id="es-assign-note" placeholder="Ej. Acordado con la cliente"/>
+      <button class="es-btn" id="es-assign-save" style="margin-top:14px">Programar plan y fecha</button>
     </div>`;
 
     Object.keys(byTariff).forEach(tariff=>{
@@ -1711,11 +1715,18 @@
       const userId = document.getElementById('es-assign-user').value;
       const planId = document.getElementById('es-assign-planid').value;
       const creditsAssigned = document.getElementById('es-assign-credits').value;
+      const dueDate = document.getElementById('es-assign-date').value;
+      const amount = document.getElementById('es-assign-amount').value.trim() || null;
+      const note = document.getElementById('es-assign-note').value.trim();
       if(!planId){ showToast('Primero sugiere o selecciona un plan (escribe el valor o los créditos).'); return; }
       if(!creditsAssigned){ showToast('Indica cuántos créditos asignar.'); return; }
+      if(!dueDate){ showToast('Elige la próxima fecha de pago.'); return; }
       try{
-        await api('/plans/assign', { method:'POST', body: JSON.stringify({ userId, planId, creditsAssigned }) });
-        showToast('Plan asignado al cliente'); render();
+        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note, planId, creditsAssigned, amount }) });
+        const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
+        S.cartera = await api('/payments/cartera');
+        const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
+        showToast('Plan y fecha programados — ya aparece en Pagos y alertas'); render();
       }catch(err){ showToast(err.message); }
     };
 
