@@ -200,6 +200,17 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
   let confirmed;
   if (existing.rows.length) {
     confirmed = !existing.rows[0].confirmed;
+    // Cancelar (pasar de confirmado a no confirmado) — no se permite a menos de 15 minutos de la clase
+    if (!confirmed && req.user.role === 'cliente') {
+      const clsRes = await pool.query('SELECT class_date, class_time FROM classes WHERE id = $1', [classId]);
+      if (clsRes.rows.length) {
+        const classDateTime = new Date(`${clsRes.rows[0].class_date}T${clsRes.rows[0].class_time}`);
+        const minutesLeft = (classDateTime.getTime() - Date.now()) / 60000;
+        if (minutesLeft < 15) {
+          return res.status(403).json({ error: 'No puedes eliminar la reserva a menos de 15 minutos de que empiece la clase.' });
+        }
+      }
+    }
     if (req.user.role === 'cliente') {
       if (confirmed) {
         if (await isPaymentOverdue(req.user.id)) {

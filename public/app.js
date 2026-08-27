@@ -596,19 +596,34 @@
               </div>` : ''}
             </div>`;
           if(!staff && !cancelled){
+            const classDateTime = new Date(`${day.date}T${c.time}`);
+            const minutesLeft = (classDateTime.getTime() - Date.now()) / 60000;
+            const canCancel = minutesLeft >= 15;
             html += `<div style="margin-top:6px;display:flex;flex-direction:column;gap:6px">
               <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
                 <span style="font-size:12px;font-weight:600">Tú (titular)</span>
-                <div style="display:flex;gap:8px;align-items:center">
+                <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
                   ${c.scheduleId ? `<a class="es-link" data-setprefclass="${c.scheduleId}" style="font-size:10.5px">usar como habitual</a>` : ''}
-                  <button class="es-btn ${c.confirmedByMe?'secondary':''}" style="padding:4px 9px;font-size:11px" data-confirm="${c.id}|">${c.confirmedByMe?'✓ Confirmado':'Confirmar'}</button>
+                  ${c.confirmedByMe
+                    ? `<span class="es-badge ok">✓ Confirmado</span>
+                       ${canCancel
+                         ? `<button class="es-btn secondary" style="padding:4px 9px;font-size:11px;color:var(--alert);border-color:var(--alert)" data-confirm="${c.id}|">Eliminar reserva</button>`
+                         : `<span class="meta" style="font-size:10px">No se puede cancelar (faltan &lt;15 min)</span>`}`
+                    : `<button class="es-btn" style="padding:4px 9px;font-size:11px" data-confirm="${c.id}|">Confirmar</button>`}
                 </div>
               </div>`;
             (S.myBeneficiaries||[]).forEach(b=>{
               const bconf = (c.myConfirmedBeneficiaryIds||[]).includes(b.id);
-              html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+              html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
                 <span style="font-size:12px;font-weight:600">${escapeHtml(b.fullName)}</span>
-                <button class="es-btn ${bconf?'secondary':''}" style="padding:4px 9px;font-size:11px" data-confirm="${c.id}|${b.id}">${bconf?'✓ Confirmado':'Confirmar'}</button>
+                <div style="display:flex;gap:8px;align-items:center">
+                  ${bconf
+                    ? `<span class="es-badge ok">✓ Confirmado</span>
+                       ${canCancel
+                         ? `<button class="es-btn secondary" style="padding:4px 9px;font-size:11px;color:var(--alert);border-color:var(--alert)" data-confirm="${c.id}|${b.id}">Eliminar reserva</button>`
+                         : `<span class="meta" style="font-size:10px">No se puede cancelar (faltan &lt;15 min)</span>`}`
+                    : `<button class="es-btn" style="padding:4px 9px;font-size:11px" data-confirm="${c.id}|${b.id}">Confirmar</button>`}
+                </div>
               </div>`;
             });
             html += `</div>`;
