@@ -1203,16 +1203,24 @@
 
 
   function renderBaseDatosClientes(){
-    const clients = (S.allUsers||[]).filter(u=>u.role==='cliente').sort((a,b)=>a.fullName.localeCompare(b.fullName));
+    const clients = (S.allUsers||[]).filter(u=>u.role==='cliente');
+    // Ordena por mes de cumpleaños (enero primero, diciembre al final). Quienes no tengan
+    // fecha de nacimiento registrada quedan al final, ordenados por nombre.
+    clients.sort((a,b)=>{
+      const monthA = a.client && a.client.birthDate ? Number(a.client.birthDate.slice(5,7)) : 13;
+      const monthB = b.client && b.client.birthDate ? Number(b.client.birthDate.slice(5,7)) : 13;
+      if(monthA !== monthB) return monthA - monthB;
+      return a.fullName.localeCompare(b.fullName);
+    });
     let html = `<div class="es-card">
       <h2 class="es-h">Base de datos clientes</h2>
-      <p class="es-sub">${clients.length} cliente(s) registrados.</p>`;
+      <p class="es-sub">${clients.length} cliente(s) registrados, ordenados por mes de cumpleaños.</p>`;
     if(clients.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
     else{
-      html += `<table class="es-table"><thead><tr><th>Nombre del cliente</th><th>Fecha de nacimiento</th></tr></thead><tbody>`;
+      html += `<table class="es-table"><thead><tr><th>Nombre del cliente</th><th style="text-align:center">Fecha nacimiento</th></tr></thead><tbody>`;
       clients.forEach(u=>{
         const birthDate = u.client && u.client.birthDate ? u.client.birthDate : null;
-        html += `<tr><td>${escapeHtml(u.fullName)}</td><td class="meta">${birthDate ? fmtDate(birthDate) : 'Sin registrar'}</td></tr>`;
+        html += `<tr><td>${escapeHtml(u.fullName)}</td><td class="meta" style="text-align:center">${birthDate ? fmtDate(birthDate) : 'Sin registrar'}</td></tr>`;
       });
       html += `</tbody></table>`;
     }
