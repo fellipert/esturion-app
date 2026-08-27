@@ -43,6 +43,7 @@
     scheduledPayments: [],
     editingScheduleId: null,
     mensualidadFilterMonth: '',
+    payDiscountActive: false,
     historyClientId: null,
     clientHistory: null,
     myCredits: null,
@@ -858,6 +859,7 @@
       <select class="es-input" id="es-pay-user">
         ${statuses.map(u=>`<option value="${u.id}">${escapeHtml(u.fullName)}</option>`).join('')}
       </select>
+      <div id="es-pay-client-age" class="meta" style="margin-top:4px"></div>
       <label class="es-label">Fecha de pago</label>
       <input class="es-input" type="date" id="es-pay-date" value="${todayStr()}"/>
       <label class="es-label">Meses pagados</label>
@@ -876,6 +878,8 @@
       </select>
       <label class="es-label">Monto (opcional)</label>
       <input class="es-input" id="es-pay-amount" placeholder="Ej. 180000"/>
+      <button class="es-btn secondary" type="button" id="es-pay-discount-toggle" style="margin-top:8px;font-size:12px">${S.payDiscountActive?'Quitar descuento 15%':'Aplicar descuento 15%'}</button>
+      <div id="es-pay-final-amount" class="meta" style="margin-top:6px;font-weight:700;min-height:16px"></div>
       <button class="es-btn" id="es-pay-register" style="margin-top:14px">Registrar pago</button>
     </div>`;
     html += `<div class="es-card">
@@ -1591,17 +1595,53 @@
       };
     });
 
+    function updatePayClientAge(){
+      const box = document.getElementById('es-pay-client-age');
+      const sel = document.getElementById('es-pay-user');
+      if(!box || !sel) return;
+      const u = (S.allUsers||[]).find(x=>x.id===Number(sel.value));
+      const age = u && u.client && u.client.age != null ? u.client.age : null;
+      box.textContent = age != null ? `Edad del cliente: ${age} años` : '';
+    }
+    function payFinalAmount(){
+      const raw = document.getElementById('es-pay-amount').value.trim();
+      if(!raw) return null;
+      const amount = Number(raw);
+      return S.payDiscountActive ? Math.round(amount * 0.85) : amount;
+    }
+    function updatePayFinalAmountBox(){
+      const box = document.getElementById('es-pay-final-amount');
+      if(!box) return;
+      const raw = document.getElementById('es-pay-amount').value.trim();
+      if(!raw){ box.innerHTML = ''; return; }
+      const final = payFinalAmount();
+      box.innerHTML = S.payDiscountActive
+        ? `Valor a pagar con 15% de descuento: <b style="color:var(--success)">$${final.toLocaleString('es-CO')}</b>`
+        : `Valor a pagar: <b>$${final.toLocaleString('es-CO')}</b>`;
+    }
+    const payUserSelect = document.getElementById('es-pay-user');
+    if(payUserSelect){ payUserSelect.onchange = updatePayClientAge; updatePayClientAge(); }
+    const payAmountInput = document.getElementById('es-pay-amount');
+    if(payAmountInput){ payAmountInput.oninput = updatePayFinalAmountBox; updatePayFinalAmountBox(); }
+    const payDiscountToggle = document.getElementById('es-pay-discount-toggle');
+    if(payDiscountToggle) payDiscountToggle.onclick = ()=>{
+      S.payDiscountActive = !S.payDiscountActive;
+      payDiscountToggle.textContent = S.payDiscountActive ? 'Quitar descuento 15%' : 'Aplicar descuento 15%';
+      updatePayFinalAmountBox();
+    };
+
     const payRegister = document.getElementById('es-pay-register');
     if(payRegister) payRegister.onclick = async ()=>{
       const userId = document.getElementById('es-pay-user').value;
       const paidAt = document.getElementById('es-pay-date').value;
       const months = document.getElementById('es-pay-months').value;
       const method = document.getElementById('es-pay-method').value;
-      const amount = document.getElementById('es-pay-amount').value.trim();
+      const amount = payFinalAmount();
       try{
         await api('/payments', { method:'POST', body: JSON.stringify({ userId, paidAt, months, method, amount: amount || null }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
+        S.payDiscountActive = false;
         showToast('Pago registrado'); render();
       }catch(err){ showToast(err.message); }
     };
