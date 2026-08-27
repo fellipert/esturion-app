@@ -278,15 +278,16 @@
     asistencia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.3 2.3L16 9.5"/></svg>',
     pagos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="5.5" width="19" height="14" rx="2"/><path d="M2.5 10h19"/></svg>',
     confclientes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5v-13Z"/><path d="M4 10h16M8 14h3"/></svg>',
+    bdclientes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5.5" rx="8" ry="2.5"/><path d="M4 5.5v6c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5v-6"/><path d="M4 11.5v6c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5v-6"/></svg>',
     socios: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M2.5 20c0-3.6 2.9-6.5 6.5-6.5s6.5 2.9 6.5 6.5"/><circle cx="17.5" cy="8.5" r="2.5"/><path d="M15.7 13.8c2.6.5 4.6 2.8 4.6 5.6"/></svg>',
     mensajes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H8l-4 4V5Z"/></svg>',
   };
 
   function navTabs(){
     return isSuper()
-      ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['confclientes','Conf. Clientes'],['socios','Clientes'],['mensajes','Mensajes']]
+      ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['confclientes','Conf. Clientes'],['socios','Clientes'],['bdclientes','Base de datos clientes'],['mensajes','Mensajes']]
       : isAdminOrAbove()
-        ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['confclientes','Conf. Clientes'],['socios','Clientes'],['mensajes','Mensajes']]
+        ? [['perfil','Mi perfil'],['clases','Clases'],['asistencia','Asistencia'],['pagos','Pagos y alertas'],['confclientes','Conf. Clientes'],['socios','Clientes'],['bdclientes','Base de datos clientes'],['mensajes','Mensajes']]
         : [['perfil','Mi perfil'],['clases','Clases'],['pagos','Mi mensualidad'],['mensajes','Mensajes']];
   }
 
@@ -306,6 +307,7 @@
     else if(S.tab === 'asistencia' && isAdminOrAbove()) html += renderAsistenciaAdmin();
     else if(S.tab === 'pagos') html += isAdminOrAbove() ? renderPagosAdmin() : renderPagosCliente();
     else if(S.tab === 'confclientes' && isAdminOrAbove()) html += renderConfClientes();
+    else if(S.tab === 'bdclientes' && isAdminOrAbove()) html += renderBaseDatosClientes();
     else if(S.tab === 'socios' && isAdminOrAbove()) html += renderSocios();
     else if(S.tab === 'mensajes') html += renderMensajes();
     return html;
@@ -1199,6 +1201,24 @@
     return html;
   }
 
+
+  function renderBaseDatosClientes(){
+    const clients = (S.allUsers||[]).filter(u=>u.role==='cliente').sort((a,b)=>a.fullName.localeCompare(b.fullName));
+    let html = `<div class="es-card">
+      <h2 class="es-h">Base de datos clientes</h2>
+      <p class="es-sub">${clients.length} cliente(s) registrados.</p>`;
+    if(clients.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
+    else{
+      html += `<table class="es-table"><thead><tr><th>Nombre del cliente</th><th>Fecha de nacimiento</th></tr></thead><tbody>`;
+      clients.forEach(u=>{
+        const birthDate = u.client && u.client.birthDate ? u.client.birthDate : null;
+        html += `<tr><td>${escapeHtml(u.fullName)}</td><td class="meta">${birthDate ? fmtDate(birthDate) : 'Sin registrar'}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+    }
+    html += `</div>`;
+    return html;
+  }
 
   function renderMensajes(){
     let html = '';
