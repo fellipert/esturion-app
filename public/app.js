@@ -1335,7 +1335,9 @@
       try{
         const r = await api('/auth/reset-password', { method:'POST', body: JSON.stringify({ email, inviteCode, newPassword }) });
         S.token = r.token; localStorage.setItem(TOKEN_KEY, r.token);
-        S.user = r.user; S.authError=''; S.tab='perfil'; S.authTab='login';
+        S.user = r.user;
+        try{ const full = await api('/users/me'); S.user = full.user; }catch(e){}
+        S.authError=''; S.tab='perfil'; S.authTab='login';
         S.loading = true; render();
         await loadDashboardData();
         S.loading = false;
@@ -1363,7 +1365,9 @@
       try{
         const r = await api('/auth/login', { method:'POST', body: JSON.stringify({ email, password }) });
         S.token = r.token; localStorage.setItem(TOKEN_KEY, r.token);
-        S.user = r.user; S.authError=''; S.tab='perfil';
+        S.user = r.user;
+        try{ const full = await api('/users/me'); S.user = full.user; }catch(e){}
+        S.authError=''; S.tab='perfil';
         S.loading = true; render();
         await loadDashboardData();
         S.loading = false; render();
@@ -1380,7 +1384,9 @@
       try{
         const r = await api('/auth/register', { method:'POST', body: JSON.stringify({ fullName, email, phone, password, inviteCode }) });
         S.token = r.token; localStorage.setItem(TOKEN_KEY, r.token);
-        S.user = r.user; S.authError=''; S.tab='perfil';
+        S.user = r.user;
+        try{ const full = await api('/users/me'); S.user = full.user; }catch(e){}
+        S.authError=''; S.tab='perfil';
         S.loading = true; render();
         await loadDashboardData();
         S.loading = false;
