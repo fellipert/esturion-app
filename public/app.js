@@ -44,6 +44,7 @@
     editingScheduleId: null,
     mensualidadFilterMonth: '',
     payDiscountActive: false,
+    allBeneficiaries: [],
     historyClientId: null,
     clientHistory: null,
     myCredits: null,
@@ -140,6 +141,7 @@
       try{ const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled; }catch(e){}
       try{ const m = await api('/messages/sent'); S.sentMessages = m.messages; }catch(e){}
       try{ const ic = await api('/settings/invite-code'); S.inviteCode = ic.inviteCode; }catch(e){}
+      try{ const ab = await api('/beneficiaries'); S.allBeneficiaries = ab.beneficiaries; }catch(e){}
     } else {
       try{ const p = await api('/payments/me'); S.myPayment = p; }catch(e){}
       try{ S.myStats = await api('/classes/attendance-stats/me'); }catch(e){}
@@ -1144,7 +1146,7 @@
 
   function renderFichaSocio(u){
     const cl = u.client || {};
-    const REL_LABEL = { '':'—' };
+    const benes = (S.allBeneficiaries||[]).filter(b=>b.clientUserId===u.id);
     return `<div style="width:100%;background:var(--bg-alt);border-radius:10px;padding:12px;font-size:12.5px">
       <div class="es-grid" style="gap:6px 18px">
         <div>
@@ -1160,6 +1162,14 @@
         </div>
       </div>
       <div style="margin-top:8px"><b>Enfermedad o lesión física:</b> ${escapeHtml(cl.medicalCondition||'Ninguna registrada')}</div>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border)">
+        <b>Beneficiarios${cl.hasBeneficiaries?'':''}:</b>
+        ${benes.length===0
+          ? ' Ninguno registrado.'
+          : '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' +
+            benes.map(b=>`<div>• ${escapeHtml(b.fullName)} — ${escapeHtml(b.idType)}${b.idNumber?' '+escapeHtml(b.idNumber):''}${b.sex?' · '+escapeHtml(b.sex):''}</div>`).join('') +
+            '</div>'}
+      </div>
     </div>`;
   }
 
@@ -1217,10 +1227,12 @@
       <p class="es-sub">${clients.length} cliente(s) registrados, ordenados por mes de cumpleaños.</p>`;
     if(clients.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
     else{
-      html += `<table class="es-table"><thead><tr><th>Nombre del cliente</th><th style="text-align:center">Fecha nacimiento</th></tr></thead><tbody>`;
+      html += `<table class="es-table"><thead><tr><th>Nombre del cliente</th><th style="text-align:center">Fecha nacimiento</th><th>Beneficiarios</th></tr></thead><tbody>`;
       clients.forEach(u=>{
         const birthDate = u.client && u.client.birthDate ? u.client.birthDate : null;
-        html += `<tr><td>${escapeHtml(u.fullName)}</td><td class="meta" style="text-align:center">${birthDate ? fmtDate(birthDate) : 'Sin registrar'}</td></tr>`;
+        const benes = (S.allBeneficiaries||[]).filter(b=>b.clientUserId===u.id);
+        const benesText = benes.length===0 ? '—' : benes.map(b=>escapeHtml(b.fullName)).join(', ');
+        html += `<tr><td>${escapeHtml(u.fullName)}</td><td class="meta" style="text-align:center">${birthDate ? fmtDate(birthDate) : 'Sin registrar'}</td><td class="meta">${benesText}</td></tr>`;
       });
       html += `</tbody></table>`;
     }

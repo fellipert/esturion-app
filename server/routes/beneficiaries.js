@@ -53,6 +53,23 @@ router.delete('/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// Listar TODOS los beneficiarios del club, con el nombre de su cliente titular —
+// admin y super_admin (para verlos en "Clientes" y en "Base de datos clientes").
+router.get('/', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
+  const result = await pool.query(`
+    SELECT b.*, u.full_name AS client_name
+    FROM beneficiaries b JOIN users u ON u.id = b.client_user_id
+    ORDER BY u.full_name ASC, b.full_name ASC
+  `);
+  res.json({
+    beneficiaries: result.rows.map(r => ({
+      ...publicBeneficiary(r),
+      clientUserId: r.client_user_id,
+      clientName: r.client_name,
+    })),
+  });
+});
+
 // Ver los beneficiarios de un cliente específico — admin y super_admin
 router.get('/:userId', requireAuth, requireRole('admin', 'super_admin'), async (req, res) => {
   const result = await pool.query(
