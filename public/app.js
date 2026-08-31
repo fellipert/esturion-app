@@ -1229,12 +1229,14 @@
       <p class="es-sub">${clients.length} cliente(s) registrados, ordenados por mes de cumpleaños.</p>`;
     if(clients.length===0){ html += renderEmpty('Aún no hay clientes registrados.'); }
     else{
-      html += `<table class="es-table"><thead><tr><th>Nombre del cliente</th><th style="text-align:center">Fecha nacimiento</th><th>Beneficiarios</th></tr></thead><tbody>`;
+      html += `<table class="es-table"><thead><tr><th>Nombre</th><th style="text-align:center">Fecha nacimiento</th><th>Parentesco / Tipo</th></tr></thead><tbody>`;
       clients.forEach(u=>{
         const birthDate = u.client && u.client.birthDate ? u.client.birthDate : null;
         const benes = (S.allBeneficiaries||[]).filter(b=>b.clientUserId===u.id);
-        const benesText = benes.length===0 ? '—' : benes.map(b=>escapeHtml(b.fullName)).join(', ');
-        html += `<tr><td>${escapeHtml(u.fullName)}</td><td class="meta" style="text-align:center">${birthDate ? fmtDate(birthDate) : 'Sin registrar'}</td><td class="meta">${benesText}</td></tr>`;
+        html += `<tr><td>${escapeHtml(u.fullName)}</td><td class="meta" style="text-align:center">${birthDate ? fmtDate(birthDate) : 'Sin registrar'}</td><td class="meta">Cliente (titular)</td></tr>`;
+        benes.forEach(b=>{
+          html += `<tr><td style="padding-left:26px;color:#5b7480">↳ ${escapeHtml(b.fullName)}</td><td class="meta" style="text-align:center">${b.birthDate ? fmtDate(b.birthDate) : 'Sin registrar'}</td><td class="meta">Beneficiario de ${escapeHtml(u.fullName)}</td></tr>`;
+        });
       });
       html += `</tbody></table>`;
     }
