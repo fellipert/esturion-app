@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS beneficiaries (
   id             SERIAL PRIMARY KEY,
   client_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   full_name      VARCHAR(120) NOT NULL,
+  birth_date     DATE,
   id_type        VARCHAR(20) NOT NULL DEFAULT 'CC' CHECK (id_type IN ('CC','TI','CE','PASAPORTE','RC')),
   id_number      VARCHAR(40),
   sex            VARCHAR(20) CHECK (sex IN ('masculino','femenino','otro')),

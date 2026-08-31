@@ -4,10 +4,22 @@ const { requireAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
+function ageFromBirthDate(birthDate) {
+  if (!birthDate) return null;
+  const today = new Date();
+  const bd = new Date(birthDate);
+  let age = today.getFullYear() - bd.getFullYear();
+  const m = today.getMonth() - bd.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < bd.getDate())) age--;
+  return age;
+}
+
 function publicBeneficiary(row) {
   return {
     id: row.id,
     fullName: row.full_name,
+    birthDate: row.birth_date || null,
+    age: ageFromBirthDate(row.birth_date),
     idType: row.id_type,
     idNumber: row.id_number,
     sex: row.sex,
@@ -26,14 +38,14 @@ router.get('/me', requireAuth, async (req, res) => {
 // Agregar un beneficiario a mi cuenta (cliente)
 router.post('/', requireAuth, async (req, res) => {
   if (req.user.role !== 'cliente') return res.status(403).json({ error: 'Solo los clientes pueden tener beneficiarios.' });
-  const { fullName, idType, idNumber, sex } = req.body;
+  const { fullName, birthDate, idType, idNumber, sex } = req.body;
   if (!fullName || !fullName.trim()) return res.status(400).json({ error: 'El nombre del beneficiario es obligatorio.' });
   const validIdType = ['CC', 'TI', 'CE', 'PASAPORTE', 'RC'].includes(idType) ? idType : 'CC';
   const validSex = ['masculino', 'femenino', 'otro'].includes(sex) ? sex : null;
   const result = await pool.query(
-    `INSERT INTO beneficiaries (client_user_id, full_name, id_type, id_number, sex)
-     VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-    [req.user.id, fullName.trim(), validIdType, idNumber || null, validSex]
+    `INSERT INTO beneficiaries (client_user_id, full_name, birth_date, id_type, id_number, sex)
+     VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+    [req.user.id, fullName.trim(), birthDate || null, validIdType, idNumber || null, validSex]
   );
   // Marca automáticamente que este cliente ya tiene beneficiarios activados
   await pool.query(

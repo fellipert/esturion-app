@@ -403,7 +403,7 @@
         S.myBeneficiaries.forEach(b=>{
           html += `<div class="es-list-item">
             <div><div style="font-weight:700;font-size:13px">${escapeHtml(b.fullName)}</div>
-            <div class="meta">${escapeHtml(b.idType)}${b.idNumber?' '+escapeHtml(b.idNumber):''} · ${escapeHtml(b.sex||'')}</div></div>
+            <div class="meta">${b.birthDate?fmtDate(b.birthDate)+(b.age!=null?' · '+b.age+' años':'')+' · ':''}${escapeHtml(b.idType)}${b.idNumber?' '+escapeHtml(b.idNumber):''} · ${escapeHtml(b.sex||'')}</div></div>
             <a class="es-link" data-delben="${b.id}" style="font-size:11.5px;color:var(--alert)">eliminar</a>
           </div>`;
         });
@@ -412,6 +412,8 @@
       <h2 class="es-h" style="margin-top:16px;font-size:14px">Agregar beneficiario</h2>
       <label class="es-label">Nombre completo</label>
       <input class="es-input" id="es-ben-name" placeholder="Nombre y apellido"/>
+      <label class="es-label">Fecha de nacimiento</label>
+      <input class="es-input" type="date" id="es-ben-birthdate" max="${todayStr()}"/>
       <label class="es-label">Tipo de identificación</label>
       <select class="es-input" id="es-ben-idtype">
         <option value="CC" ${S.newBenIdType==='CC'?'selected':''}>Cédula de ciudadanía</option>
@@ -1167,7 +1169,7 @@
         ${benes.length===0
           ? ' Ninguno registrado.'
           : '<div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">' +
-            benes.map(b=>`<div>• ${escapeHtml(b.fullName)} — ${escapeHtml(b.idType)}${b.idNumber?' '+escapeHtml(b.idNumber):''}${b.sex?' · '+escapeHtml(b.sex):''}</div>`).join('') +
+            benes.map(b=>`<div>• ${escapeHtml(b.fullName)}${b.birthDate?' — '+fmtDate(b.birthDate)+(b.age!=null?' ('+b.age+' años)':''):''} — ${escapeHtml(b.idType)}${b.idNumber?' '+escapeHtml(b.idNumber):''}${b.sex?' · '+escapeHtml(b.sex):''}</div>`).join('') +
             '</div>'}
       </div>
     </div>`;
@@ -1465,6 +1467,7 @@
       try{
         await api('/beneficiaries', { method:'POST', body: JSON.stringify({
           fullName,
+          birthDate: document.getElementById('es-ben-birthdate').value || null,
           idType: document.getElementById('es-ben-idtype').value,
           idNumber: document.getElementById('es-ben-idnumber').value.trim(),
           sex: document.getElementById('es-ben-sex').value,
