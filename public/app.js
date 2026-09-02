@@ -1695,6 +1695,7 @@
         await api('/payments', { method:'POST', body: JSON.stringify({ userId, paidAt, months, method, amount: amount || null }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
+        const u = await api('/users'); S.allUsers = u.users;
         S.payDiscountActive = false;
         showToast('Pago registrado'); render();
       }catch(err){ showToast(err.message); }
@@ -1778,6 +1779,7 @@
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
+        const u = await api('/users'); S.allUsers = u.users;
         showToast('Configuración guardada — ya aparece en Pagos y alertas'); render();
       }catch(err){ showToast(err.message); }
     };
@@ -1791,6 +1793,7 @@
           const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
           S.cartera = await api('/payments/cartera');
           const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
+          const u = await api('/users'); S.allUsers = u.users;
           showToast('Registro de pagos eliminado'); render();
         }catch(err){ showToast(err.message); }
       };
