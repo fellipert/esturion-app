@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS clients (
   credits_used                   INTEGER NOT NULL DEFAULT 0,
   cycle_start                    DATE,
   cycle_end                      DATE,
+  payment_day                    SMALLINT CHECK (payment_day BETWEEN 1 AND 31),
   created_at                     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

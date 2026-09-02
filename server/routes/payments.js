@@ -93,12 +93,22 @@ router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, r
   if (!userId || !months) return res.status(400).json({ error: 'Cliente y meses son obligatorios.' });
   const validMethod = ['transferencia', 'nequi', 'efectivo', 'tarjeta', 'otro'].includes(method) ? method : 'transferencia';
 
-  // Fecha de pago: la que registre el admin (por defecto, hoy). Modalidad "mes adelantado":
-  // la próxima fecha de pago cae el mismo día del mes que este pago, N meses adelante —
-  // no un conteo fijo de 30 días (evita que la fecha se vaya corriendo con el tiempo).
+  // Fecha de pago: la que registre el admin (por defecto, hoy).
   const paidDateStr = paidAt || new Date().toISOString().slice(0, 10);
+
+  // Si el cliente ya tiene un día fijo de pago configurado (desde "Conf. Clientes"), la próxima
+  // fecha de pago SIEMPRE cae ese día, sin importar si esta vez pagó antes o después. Si todavía
+  // no tiene un día fijo, se usa el mismo día del mes en que se registra este pago (y ese día
+  // queda fijado para los próximos ciclos).
+  const clientRow = await pool.query('SELECT payment_day FROM clients WHERE user_id = $1', [userId]);
+  let paymentDay = clientRow.rows[0]?.payment_day || null;
+  const paidDay = Number(paidDateStr.slice(8, 10));
+  if (!paymentDay) paymentDay = paidDay;
+
   const dueDateObj = new Date(paidDateStr + 'T00:00:00');
   dueDateObj.setMonth(dueDateObj.getMonth() + Number(months));
+  const lastDayOfMonth = new Date(dueDateObj.getFullYear(), dueDateObj.getMonth() + 1, 0).getDate();
+  dueDateObj.setDate(Math.min(paymentDay, lastDayOfMonth));
   const dueDateStr = dueDateObj.toISOString().slice(0, 10);
 
   // El ciclo empieza el día del pago y vence un día antes de la próxima fecha de pago.
@@ -113,9 +123,10 @@ router.post('/', requireAuth, requireRole('admin', 'super_admin'), async (req, r
   );
 
   // Actualiza el ciclo del cliente. Como es pago mes adelantado, el valor de la mensualidad
-  // que ve el cliente pasa a ser el valor realmente pagado en este registro.
-  const fields = ['cycle_start = $1', 'cycle_end = $2'];
-  const params = [paidDateStr, cycleEndStr];
+  // que ve el cliente pasa a ser el valor realmente pagado en este registro. El día fijo de
+  // pago se guarda (o se conserva) para que futuros pagos no lo corran.
+  const fields = ['cycle_start = $1', 'cycle_end = $2', 'payment_day = $3'];
+  const params = [paidDateStr, cycleEndStr, paymentDay];
   if (amount) {
     fields.push(`monthly_fee = $${params.length + 1}`);
     params.push(amount);
@@ -151,8 +162,8 @@ router.post('/schedule', requireAuth, requireRole('admin', 'super_admin'), async
   cycleEndObj.setDate(cycleEndObj.getDate() - 1);
   const cycleEndStr = cycleEndObj.toISOString().slice(0, 10);
 
-  const fields = ['cycle_start = CURRENT_DATE', 'cycle_end = $1'];
-  const params = [cycleEndStr];
+  const fields = ['cycle_start = CURRENT_DATE', 'cycle_end = $1', 'payment_day = $2'];
+  const params = [cycleEndStr, Number(dueDate.slice(8, 10))];
   if (amount) {
     fields.push(`monthly_fee = $${params.length + 1}`);
     params.push(amount);
