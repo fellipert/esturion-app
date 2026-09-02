@@ -23,6 +23,12 @@ function publicBeneficiary(row) {
     idType: row.id_type,
     idNumber: row.id_number,
     sex: row.sex,
+    monthlyFee: row.monthly_fee != null ? Number(row.monthly_fee) : null,
+    creditsAssigned: row.credits_assigned != null ? Number(row.credits_assigned) : 0,
+    creditsUsed: row.credits_used != null ? Number(row.credits_used) : 0,
+    cycleStart: row.cycle_start || null,
+    cycleEnd: row.cycle_end || null,
+    paymentDay: row.payment_day || null,
   };
 }
 

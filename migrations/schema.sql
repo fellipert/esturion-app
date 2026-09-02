@@ -65,14 +65,20 @@ CREATE TABLE IF NOT EXISTS clients (
 -- Beneficiarios de un cliente (hijos, familiares, etc.) que pueden reservar clases
 -- bajo la cuenta del cliente titular, sin tener su propio login.
 CREATE TABLE IF NOT EXISTS beneficiaries (
-  id             SERIAL PRIMARY KEY,
-  client_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  full_name      VARCHAR(120) NOT NULL,
-  birth_date     DATE,
-  id_type        VARCHAR(20) NOT NULL DEFAULT 'CC' CHECK (id_type IN ('CC','TI','CE','PASAPORTE','RC')),
-  id_number      VARCHAR(40),
-  sex            VARCHAR(20) CHECK (sex IN ('masculino','femenino','otro')),
-  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                SERIAL PRIMARY KEY,
+  client_user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  full_name         VARCHAR(120) NOT NULL,
+  birth_date        DATE,
+  id_type           VARCHAR(20) NOT NULL DEFAULT 'CC' CHECK (id_type IN ('CC','TI','CE','PASAPORTE','RC')),
+  id_number         VARCHAR(40),
+  sex               VARCHAR(20) CHECK (sex IN ('masculino','femenino','otro')),
+  monthly_fee       NUMERIC(10,2),
+  credits_assigned  INTEGER NOT NULL DEFAULT 0,
+  credits_used      INTEGER NOT NULL DEFAULT 0,
+  cycle_start       DATE,
+  cycle_end         DATE,
+  payment_day       SMALLINT CHECK (payment_day BETWEEN 1 AND 31),
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Plantillas de horario semanal ("Lunes 6:30pm es una clase regular"). El calendario que ve
@@ -138,6 +144,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_unique
 CREATE TABLE IF NOT EXISTS payments (
   id               SERIAL PRIMARY KEY,
   user_id          INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  beneficiary_id   INTEGER REFERENCES beneficiaries(id) ON DELETE CASCADE,
   amount           NUMERIC(10,2),
   method           VARCHAR(30) DEFAULT 'transferencia' CHECK (method IN ('transferencia','nequi','efectivo','tarjeta','otro')),
   months           INTEGER NOT NULL DEFAULT 1,

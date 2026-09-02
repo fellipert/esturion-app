@@ -863,7 +863,7 @@
       <p class="es-sub">Modalidad mes adelantado: la próxima fecha de pago cae el mismo día del mes que registres aquí.</p>
       <label class="es-label">Cliente</label>
       <select class="es-input" id="es-pay-user">
-        ${statuses.map(u=>`<option value="${u.id}">${escapeHtml(u.fullName)}</option>`).join('')}
+        ${statuses.map(u=>`<option value="${u.kind}:${u.id}">${u.kind==='beneficiary'?'↳ ':''}${escapeHtml(u.fullName)}</option>`).join('')}
       </select>
       <div id="es-pay-client-age" class="meta" style="margin-top:4px"></div>
       <label class="es-label">Fecha de pago</label>
@@ -901,7 +901,7 @@
           <label class="es-label" style="margin-top:0">Ver historial de un cliente</label>
           <select class="es-input" id="es-hist-client">
             <option value="">Selecciona un cliente...</option>
-            ${statuses.map(s=>`<option value="${s.id}" ${S.historyClientId===s.id?'selected':''}>${escapeHtml(s.fullName)}</option>`).join('')}
+            ${statuses.map(s=>`<option value="${s.kind}:${s.id}">${s.kind==='beneficiary'?'↳ ':''}${escapeHtml(s.fullName)}</option>`).join('')}
           </select>
           <button class="es-btn secondary" id="es-hist-view" style="margin-top:8px;font-size:12px">Ver historial mes a mes</button>
         </div>
@@ -927,7 +927,7 @@
     else{
       html += `<table class="es-table" style="font-size:11.5px;margin-top:14px"><thead><tr><th>Cliente</th><th>Fecha de pago actual</th><th>Vencimiento</th><th>Estado</th><th></th></tr></thead><tbody>`;
       filteredStatuses.forEach(s=>{
-        html += `<tr><td>${escapeHtml(s.fullName)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.currentPaymentDate)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.dueDate)}</td><td><span class="es-badge ${paymentBadgeClass(s.status)}">${s.label}</span></td><td><a class="es-link" data-resetpayments="${s.id}|${escapeHtml(s.fullName)}" style="font-size:11px;color:var(--alert);white-space:nowrap">eliminar</a></td></tr>`;
+        html += `<tr><td>${escapeHtml(s.fullName)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.currentPaymentDate)}</td><td class="meta" style="white-space:nowrap">${fmtDate(s.dueDate)}</td><td><span class="es-badge ${paymentBadgeClass(s.status)}">${s.label}</span></td><td><a class="es-link" data-resetpayments="${s.kind}:${s.id}|${escapeHtml(s.fullName)}" style="font-size:11px;color:var(--alert);white-space:nowrap">eliminar</a></td></tr>`;
       });
       html += `</tbody></table>`;
     }
@@ -1176,17 +1176,29 @@
   }
 
   function renderConfClientes(){
+    // S.paymentStatuses ya trae clientes (kind:'client') y beneficiarios (kind:'beneficiary')
+    // desde el backend. Usamos un identificador compuesto "kind:id" para no confundirlos.
     const clientOptions = (S.paymentStatuses||[]);
-    const selectedId = S.confClientId || (clientOptions[0] && clientOptions[0].id) || '';
-    const selected = clientOptions.find(u=>u.id===Number(selectedId));
-    const selectedFull = (S.allUsers||[]).find(u=>u.id===Number(selectedId));
-    const cl = (selectedFull && selectedFull.client) || {};
+    const defaultKey = clientOptions[0] ? `${clientOptions[0].kind}:${clientOptions[0].id}` : '';
+    const selectedKey = S.confClientId || defaultKey;
+    const selected = clientOptions.find(u=>`${u.kind}:${u.id}`===selectedKey);
+    const isBen = selected && selected.kind === 'beneficiary';
+    let cl = {};
+    if(selected){
+      if(isBen){
+        const benFull = (S.allBeneficiaries||[]).find(b=>b.id===selected.id);
+        cl = benFull ? { monthlyFee: benFull.monthlyFee, creditsAssigned: benFull.creditsAssigned } : {};
+      } else {
+        const selectedFull = (S.allUsers||[]).find(u=>u.id===selected.id);
+        cl = (selectedFull && selectedFull.client) || {};
+      }
+    }
     let html = `<div class="es-card" style="margin-bottom:16px">
       <h2 class="es-h">Conf. Clientes</h2>
-      <p class="es-sub">Configura por cada cliente su valor a pagar, los créditos asignados y su próxima fecha de pago. Queda como su configuración por defecto — puedes modificarla cuando quieras. Esto alimenta directamente las alertas y el estado de mensualidades en "Pagos y alertas".</p>
+      <p class="es-sub">Configura por cada cliente o beneficiario su valor a pagar, los créditos asignados y su próxima fecha de pago. Queda como su configuración por defecto — puedes modificarla cuando quieras. Esto alimenta directamente las alertas y el estado de mensualidades en "Pagos y alertas".</p>
       <label class="es-label">Filtro de cliente</label>
       <select class="es-input" id="es-conf-client">
-        ${clientOptions.map(u=>`<option value="${u.id}" ${Number(selectedId)===u.id?'selected':''}>${escapeHtml(u.fullName)}</option>`).join('')}
+        ${clientOptions.map(u=>`<option value="${u.kind}:${u.id}" ${selectedKey===`${u.kind}:${u.id}`?'selected':''}>${u.kind==='beneficiary'?'↳ ':''}${escapeHtml(u.fullName)}</option>`).join('')}
       </select>`;
     if(clientOptions.length===0){
       html += renderEmpty('Aún no hay clientes registrados.');
@@ -1207,8 +1219,8 @@
         <input class="es-input" type="date" id="es-conf-date" value="${(selected&&selected.dueDate)?selected.dueDate:todayStr()}"/>
         <label class="es-label">Nota (opcional)</label>
         <input class="es-input" id="es-conf-note" placeholder="Ej. Acordado con la cliente"/>
-        <button class="es-btn" id="es-conf-save" style="margin-top:14px">Guardar configuración del cliente</button>
-        <p class="es-hint">Estos campos ya muestran lo que este cliente tiene configurado actualmente. Cambia lo que necesites y guarda para actualizarlo.</p>
+        <button class="es-btn" id="es-conf-save" style="margin-top:14px">Guardar configuración</button>
+        <p class="es-hint">Estos campos ya muestran lo que esta persona tiene configurado actualmente. Cambia lo que necesites y guarda para actualizarlo.</p>
       </div>`;
     }
     html += `</div>`;
@@ -1653,7 +1665,13 @@
       const box = document.getElementById('es-pay-client-age');
       const sel = document.getElementById('es-pay-user');
       if(!box || !sel) return;
-      const u = (S.allUsers||[]).find(x=>x.id===Number(sel.value));
+      const [kind, id] = sel.value.split(':');
+      if(kind==='beneficiary'){
+        const b = (S.allBeneficiaries||[]).find(x=>String(x.id)===id);
+        box.textContent = (b && b.age != null) ? `Edad del beneficiario: ${b.age} años` : '';
+        return;
+      }
+      const u = (S.allUsers||[]).find(x=>String(x.id)===id);
       const age = u && u.client && u.client.age != null ? u.client.age : null;
       box.textContent = age != null ? `Edad del cliente: ${age} años` : '';
     }
@@ -1686,34 +1704,23 @@
 
     const payRegister = document.getElementById('es-pay-register');
     if(payRegister) payRegister.onclick = async ()=>{
-      const userId = document.getElementById('es-pay-user').value;
+      const [kind, id] = document.getElementById('es-pay-user').value.split(':');
+      const isBen = kind === 'beneficiary';
+      const selectedStatus = (S.paymentStatuses||[]).find(u=>u.kind===kind && String(u.id)===id);
+      const userId = isBen ? (selectedStatus && selectedStatus.parentUserId) : id;
+      const beneficiaryId = isBen ? id : null;
       const paidAt = document.getElementById('es-pay-date').value;
       const months = document.getElementById('es-pay-months').value;
       const method = document.getElementById('es-pay-method').value;
       const amount = payFinalAmount();
       try{
-        await api('/payments', { method:'POST', body: JSON.stringify({ userId, paidAt, months, method, amount: amount || null }) });
+        await api('/payments', { method:'POST', body: JSON.stringify({ userId, beneficiaryId, paidAt, months, method, amount: amount || null }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         const u = await api('/users'); S.allUsers = u.users;
+        const ab = await api('/beneficiaries'); S.allBeneficiaries = ab.beneficiaries;
         S.payDiscountActive = false;
         showToast('Pago registrado'); render();
-      }catch(err){ showToast(err.message); }
-    };
-
-    const schedSave = document.getElementById('es-sched-save');
-    if(schedSave) schedSave.onclick = async ()=>{
-      const userId = document.getElementById('es-sched-user').value;
-      const dueDate = document.getElementById('es-sched-date').value;
-      const note = document.getElementById('es-sched-note').value.trim();
-      const amount = document.getElementById('es-sched-amount').value.trim() || null;
-      if(!dueDate){ showToast('Elige una fecha.'); return; }
-      try{
-        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note, amount }) });
-        const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
-        S.cartera = await api('/payments/cartera');
-        const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
-        showToast('Fecha de pago programada'); render();
       }catch(err){ showToast(err.message); }
     };
 
@@ -1755,7 +1762,7 @@
 
     const confClientSelect = document.getElementById('es-conf-client');
     if(confClientSelect) confClientSelect.onchange = ()=>{
-      S.confClientId = Number(confClientSelect.value);
+      S.confClientId = confClientSelect.value;
       render();
     };
     const confRange = document.getElementById('es-conf-range');
@@ -1768,32 +1775,39 @@
     };
     const confSave = document.getElementById('es-conf-save');
     if(confSave) confSave.onclick = async ()=>{
-      const userId = document.getElementById('es-conf-client').value;
+      const [kind, id] = document.getElementById('es-conf-client').value.split(':');
+      const isBen = kind === 'beneficiary';
+      const selectedStatus = (S.paymentStatuses||[]).find(u=>u.kind===kind && String(u.id)===id);
+      const userId = isBen ? (selectedStatus && selectedStatus.parentUserId) : id;
+      const beneficiaryId = isBen ? id : null;
       const amount = document.getElementById('es-conf-amount').value.trim() || null;
       const creditsAssigned = document.getElementById('es-conf-credits').value || null;
       const dueDate = document.getElementById('es-conf-date').value;
       const note = document.getElementById('es-conf-note').value.trim();
       if(!dueDate){ showToast('Elige la próxima fecha de pago.'); return; }
       try{
-        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, dueDate, note, amount, creditsAssigned }) });
+        await api('/payments/schedule', { method:'POST', body: JSON.stringify({ userId, beneficiaryId, dueDate, note, amount, creditsAssigned }) });
         const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
         S.cartera = await api('/payments/cartera');
         const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
         const u = await api('/users'); S.allUsers = u.users;
+        const ab = await api('/beneficiaries'); S.allBeneficiaries = ab.beneficiaries;
         showToast('Configuración guardada — ya aparece en Pagos y alertas'); render();
       }catch(err){ showToast(err.message); }
     };
 
     document.querySelectorAll('[data-resetpayments]').forEach(el=>{
       el.onclick = async ()=>{
-        const [userId, fullName] = el.getAttribute('data-resetpayments').split('|');
+        const [key, fullName] = el.getAttribute('data-resetpayments').split('|');
+        const [kind, id] = key.split(':');
         if(!confirm(`¿Eliminar todo el registro de pagos de ${fullName}? Se reinicia su plan y créditos. Su cuenta NO se elimina.`)) return;
         try{
-          await api('/payments/reset/'+userId, { method:'DELETE' });
+          await api(kind==='beneficiary' ? '/payments/reset-beneficiary/'+id : '/payments/reset/'+id, { method:'DELETE' });
           const p = await api('/payments'); S.paymentAlerts = p.alerts; S.paymentStatuses = p.members;
           S.cartera = await api('/payments/cartera');
           const sc = await api('/payments/scheduled'); S.scheduledPayments = sc.scheduled;
           const u = await api('/users'); S.allUsers = u.users;
+          const ab = await api('/beneficiaries'); S.allBeneficiaries = ab.beneficiaries;
           showToast('Registro de pagos eliminado'); render();
         }catch(err){ showToast(err.message); }
       };
@@ -1804,11 +1818,12 @@
 
     const histView = document.getElementById('es-hist-view');
     if(histView) histView.onclick = async ()=>{
-      const clientId = document.getElementById('es-hist-client').value;
-      if(!clientId){ showToast('Elige un cliente primero.'); return; }
+      const value = document.getElementById('es-hist-client').value;
+      if(!value){ showToast('Elige un cliente primero.'); return; }
+      const [kind, id] = value.split(':');
       try{
-        S.historyClientId = Number(clientId);
-        S.clientHistory = await api('/payments/history/'+clientId);
+        S.historyClientId = value;
+        S.clientHistory = await api(kind==='beneficiary' ? '/payments/history-beneficiary/'+id : '/payments/history/'+id);
         render();
       }catch(err){ showToast(err.message); }
     };

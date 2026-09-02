@@ -157,23 +157,37 @@ router.delete('/:id', requireAuth, requireRole('admin', 'super_admin'), async (r
 // beneficiario específico (beneficiaryId presente). Verifica que el beneficiario sea propio.
 // Créditos: 1 crédito = 1 clase. Solo aplica a role='cliente' — el pool de créditos es
 // compartido entre el titular y sus beneficiarios (una sola cuenta, un solo saldo).
-async function hasAvailableCredits(userId) {
+async function hasAvailableCredits(userId, beneficiaryId) {
+  if (beneficiaryId) {
+    const b = await pool.query('SELECT credits_assigned, credits_used FROM beneficiaries WHERE id = $1', [beneficiaryId]);
+    if (!b.rows.length) return true;
+    return (b.rows[0].credits_assigned - b.rows[0].credits_used) > 0;
+  }
   const c = await pool.query('SELECT credits_assigned, credits_used FROM clients WHERE user_id = $1', [userId]);
   if (!c.rows.length) return true;
   return (c.rows[0].credits_assigned - c.rows[0].credits_used) > 0;
 }
-async function adjustCredits(userId, delta) {
+async function adjustCredits(userId, beneficiaryId, delta) {
+  if (beneficiaryId) {
+    await pool.query(
+      'UPDATE beneficiaries SET credits_used = GREATEST(0, LEAST(credits_assigned, credits_used + $1)) WHERE id = $2',
+      [delta, beneficiaryId]
+    );
+    return;
+  }
   await pool.query(
     'UPDATE clients SET credits_used = GREATEST(0, LEAST(credits_assigned, credits_used + $1)) WHERE user_id = $2',
     [delta, userId]
   );
 }
 // La mensualidad vencida bloquea nuevas reservas, aunque todavía tenga créditos sin usar
-// de un ciclo anterior.
-async function isPaymentOverdue(userId) {
+// de un ciclo anterior. Cada beneficiario tiene su propio vencimiento; el titular, el suyo.
+async function isPaymentOverdue(userId, beneficiaryId) {
   const result = await pool.query(
-    'SELECT due_date FROM payments WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
-    [userId]
+    beneficiaryId
+      ? 'SELECT due_date FROM payments WHERE beneficiary_id = $1 ORDER BY created_at DESC LIMIT 1'
+      : 'SELECT due_date FROM payments WHERE user_id = $1 AND beneficiary_id IS NULL ORDER BY created_at DESC LIMIT 1',
+    [beneficiaryId || userId]
   );
   if (!result.rows.length) return false; // sin ningún pago registrado aún: no se bloquea aquí
   const dueDate = result.rows[0].due_date;
@@ -213,15 +227,15 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
     }
     if (req.user.role === 'cliente') {
       if (confirmed) {
-        if (await isPaymentOverdue(req.user.id)) {
-          return res.status(403).json({ error: 'Tu mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
+        if (await isPaymentOverdue(req.user.id, beneficiaryId)) {
+          return res.status(403).json({ error: 'La mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
         }
-        if (!(await hasAvailableCredits(req.user.id))) {
-          return res.status(403).json({ error: 'No tienes créditos disponibles para reservar esta clase.' });
+        if (!(await hasAvailableCredits(req.user.id, beneficiaryId))) {
+          return res.status(403).json({ error: 'No hay créditos disponibles para reservar esta clase.' });
         }
-        await adjustCredits(req.user.id, 1);
+        await adjustCredits(req.user.id, beneficiaryId, 1);
       } else {
-        await adjustCredits(req.user.id, -1);
+        await adjustCredits(req.user.id, beneficiaryId, -1);
       }
     }
     await pool.query(
@@ -230,13 +244,13 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
     );
   } else {
     if (req.user.role === 'cliente') {
-      if (await isPaymentOverdue(req.user.id)) {
-        return res.status(403).json({ error: 'Tu mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
+      if (await isPaymentOverdue(req.user.id, beneficiaryId)) {
+        return res.status(403).json({ error: 'La mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
       }
-      if (!(await hasAvailableCredits(req.user.id))) {
-        return res.status(403).json({ error: 'No tienes créditos disponibles para reservar esta clase.' });
+      if (!(await hasAvailableCredits(req.user.id, beneficiaryId))) {
+        return res.status(403).json({ error: 'No hay créditos disponibles para reservar esta clase.' });
       }
-      await adjustCredits(req.user.id, 1);
+      await adjustCredits(req.user.id, beneficiaryId, 1);
     }
     confirmed = true;
     await pool.query(
@@ -247,17 +261,15 @@ router.post('/:id/confirm', requireAuth, async (req, res) => {
   res.json({ confirmed, beneficiaryId });
 });
 
-// Confirmar de una vez para el titular y todos sus beneficiarios
+// Confirmar de una vez para el titular y todos sus beneficiarios (cada uno con su propio
+// vencimiento y créditos — se salta a quien esté vencido o sin crédito, sin bloquear al resto)
 router.post('/:id/confirm-all', requireAuth, async (req, res) => {
   const classId = req.params.id;
-  if (req.user.role === 'cliente' && await isPaymentOverdue(req.user.id)) {
-    return res.status(403).json({ error: 'Tu mensualidad está vencida. Contacta a la administración para poder reservar clases.' });
-  }
   const beneficiaries = await pool.query(
     'SELECT id FROM beneficiaries WHERE client_user_id = $1', [req.user.id]
   );
   const people = [null, ...beneficiaries.rows.map(b => b.id)];
-  let confirmedCount = 0, skippedForCredits = 0;
+  let confirmedCount = 0, skippedForCredits = 0, skippedForOverdue = 0;
   for (const beneficiaryId of people) {
     const existing = await pool.query(
       'SELECT id, confirmed FROM attendance WHERE class_id = $1 AND user_id = $2 AND COALESCE(beneficiary_id,0) = COALESCE($3,0)',
@@ -265,11 +277,15 @@ router.post('/:id/confirm-all', requireAuth, async (req, res) => {
     );
     const alreadyConfirmed = existing.rows.length && existing.rows[0].confirmed;
     if (alreadyConfirmed) { confirmedCount++; continue; }
-    if (req.user.role === 'cliente' && !(await hasAvailableCredits(req.user.id))) {
+    if (req.user.role === 'cliente' && await isPaymentOverdue(req.user.id, beneficiaryId)) {
+      skippedForOverdue++;
+      continue;
+    }
+    if (req.user.role === 'cliente' && !(await hasAvailableCredits(req.user.id, beneficiaryId))) {
       skippedForCredits++;
       continue;
     }
-    if (req.user.role === 'cliente') await adjustCredits(req.user.id, 1);
+    if (req.user.role === 'cliente') await adjustCredits(req.user.id, beneficiaryId, 1);
     if (existing.rows.length) {
       await pool.query('UPDATE attendance SET confirmed = true, confirmed_at = now() WHERE id = $1', [existing.rows[0].id]);
     } else {
@@ -280,7 +296,7 @@ router.post('/:id/confirm-all', requireAuth, async (req, res) => {
     }
     confirmedCount++;
   }
-  res.json({ ok: true, count: confirmedCount, skippedForCredits });
+  res.json({ ok: true, count: confirmedCount, skippedForCredits, skippedForOverdue });
 });
 
 // Ver el detalle de asistencia (reservas) de una clase — admin y super_admin.
