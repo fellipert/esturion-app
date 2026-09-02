@@ -39,6 +39,11 @@ function publicUser(row) {
     notes: row.notes || null,
     active: row.active !== false,
     hasBeneficiaries: row.has_beneficiaries === true,
+    creditsAssigned: row.credits_assigned != null ? Number(row.credits_assigned) : 0,
+    creditsUsed: row.credits_used != null ? Number(row.credits_used) : 0,
+    cycleStart: row.cycle_start || null,
+    cycleEnd: row.cycle_end || null,
+    paymentDay: row.payment_day || null,
   };
   return base;
 }
@@ -46,7 +51,8 @@ function publicUser(row) {
 const SELECT_WITH_CLIENT = `
   SELECT u.*, c.birth_date, c.eps, c.personal_contact_phone,
          c.emergency_contact_name, c.emergency_contact_phone, c.emergency_contact_relationship,
-         c.medical_condition, c.monthly_fee, c.notes, c.active, c.has_beneficiaries
+         c.medical_condition, c.monthly_fee, c.notes, c.active, c.has_beneficiaries,
+         c.credits_assigned, c.credits_used, c.cycle_start, c.cycle_end, c.payment_day
   FROM users u LEFT JOIN clients c ON c.user_id = u.id
 `;
 

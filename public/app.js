@@ -1179,6 +1179,8 @@
     const clientOptions = (S.paymentStatuses||[]);
     const selectedId = S.confClientId || (clientOptions[0] && clientOptions[0].id) || '';
     const selected = clientOptions.find(u=>u.id===Number(selectedId));
+    const selectedFull = (S.allUsers||[]).find(u=>u.id===Number(selectedId));
+    const cl = (selectedFull && selectedFull.client) || {};
     let html = `<div class="es-card" style="margin-bottom:16px">
       <h2 class="es-h">Conf. Clientes</h2>
       <p class="es-sub">Configura por cada cliente su valor a pagar, los créditos asignados y su próxima fecha de pago. Queda como su configuración por defecto — puedes modificarla cuando quieras. Esto alimenta directamente las alertas y el estado de mensualidades en "Pagos y alertas".</p>
@@ -1198,14 +1200,15 @@
           <option value="120001-170000">Rango 2: $120.001 a $170.000</option>
         </select>
         <label class="es-label">Valor a pagar (mensualidad)</label>
-        <input class="es-input" id="es-conf-amount" placeholder="Ej. 135000"/>
+        <input class="es-input" id="es-conf-amount" value="${cl.monthlyFee?cl.monthlyFee:''}" placeholder="Ej. 135000"/>
         <label class="es-label">Créditos asignados</label>
-        <input class="es-input" type="number" min="1" id="es-conf-credits" placeholder="Ej. 8"/>
+        <input class="es-input" type="number" min="1" id="es-conf-credits" value="${cl.creditsAssigned?cl.creditsAssigned:''}" placeholder="Ej. 8"/>
         <label class="es-label">Programación de pago mensual — próxima fecha de pago</label>
-        <input class="es-input" type="date" id="es-conf-date" value="${todayStr()}"/>
+        <input class="es-input" type="date" id="es-conf-date" value="${(selected&&selected.dueDate)?selected.dueDate:todayStr()}"/>
         <label class="es-label">Nota (opcional)</label>
         <input class="es-input" id="es-conf-note" placeholder="Ej. Acordado con la cliente"/>
         <button class="es-btn" id="es-conf-save" style="margin-top:14px">Guardar configuración del cliente</button>
+        <p class="es-hint">Estos campos ya muestran lo que este cliente tiene configurado actualmente. Cambia lo que necesites y guarda para actualizarlo.</p>
       </div>`;
     }
     html += `</div>`;
